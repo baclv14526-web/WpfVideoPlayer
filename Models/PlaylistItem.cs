@@ -1,3 +1,5 @@
+using System.IO;
+
 namespace WpfVideoPlayer.Models;
 
 public class PlaylistItem

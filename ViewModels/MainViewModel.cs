@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.IO;
 using System.Runtime.CompilerServices;
 using System.Windows;
 using System.Windows.Input;
@@ -247,14 +248,14 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
 
     private void OpenFolder()
     {
-        var dlg = new System.Windows.Forms.FolderBrowserDialog
+        var dlg = new Microsoft.Win32.OpenFolderDialog
         {
-            Description = "Chọn thư mục chứa video"
+            Title = "Chọn thư mục chứa video"
         };
-        if (dlg.ShowDialog() == System.Windows.Forms.DialogResult.OK)
+        if (dlg.ShowDialog() == true)
         {
             var exts = new[] { ".mp4", ".mkv", ".avi", ".mov", ".wmv", ".flv", ".webm", ".m4v", ".ts", ".m2ts", ".vob", ".ogv", ".3gp", ".mpg", ".mpeg", ".rmvb", ".f4v", ".asf" };
-            var files = Directory.GetFiles(dlg.SelectedPath, "*.*", SearchOption.TopDirectoryOnly)
+            var files = Directory.GetFiles(dlg.FolderName, "*.*", SearchOption.TopDirectoryOnly)
                 .Where(f => exts.Contains(Path.GetExtension(f).ToLower()))
                 .OrderBy(f => f)
                 .ToArray();
@@ -357,12 +358,14 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     // ── Helpers ───────────────────────────────────────────────────────────────
     private string GetVideoInfo()
     {
-        if (_mediaPlayer?.Media == null) return "";
-        var vt = _mediaPlayer.Media.Tracks.FirstOrDefault(t => t.TrackType == TrackType.Video);
-        if (vt != null)
+        var tracks = _mediaPlayer?.Media?.Tracks;
+        if (tracks == null) return "";
+        var vt = tracks.FirstOrDefault(t => t.TrackType == TrackType.Video);
+        if (vt.TrackType == TrackType.Video)
         {
             var v = vt.Data.Video;
-            return $"{v.Width}×{v.Height}";
+            if (v.Width > 0 && v.Height > 0)
+                return $"{v.Width}×{v.Height}";
         }
         return "";
     }
