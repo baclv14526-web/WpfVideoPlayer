@@ -1,0 +1,177 @@
+name: Build & Release
+
+# ── Triggers ──────────────────────────────────────────────────────────────────
+on:
+  push:
+    tags:
+      - 'v*.*.*'          # vX.Y.Z  → build + create GitHub Release
+  workflow_dispatch:      # manual run from Actions tab (no release created)
+    inputs:
+      version:
+        description: 'Version override (e.g. 1.2.3). Leave blank to use 0.0.0-dev'
+        required: false
+        default: ''
+
+# ── Permissions ───────────────────────────────────────────────────────────────
+permissions:
+  contents: write         # needed to create GitHub Releases & upload assets
+
+# ── Jobs ──────────────────────────────────────────────────────────────────────
+jobs:
+  build:
+    name: Build installer (Windows x64)
+    runs-on: windows-latest   # Windows Server 2022 — has WPF build support
+
+    steps:
+    # ── 1. Checkout ───────────────────────────────────────────────────────────
+    - name: Checkout source
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0    # full history so tags are visible
+
+    # ── 2. Resolve version string ─────────────────────────────────────────────
+    - name: Resolve version
+      id: version
+      shell: pwsh
+      run: |
+        if ("${{ github.event_name }}" -eq "push" -and "${{ github.ref_type }}" -eq "tag") {
+          # Strip leading "v" from tag name: v1.2.3 → 1.2.3
+          $ver = "${{ github.ref_name }}" -replace '^v', ''
+        } elseif ("${{ inputs.version }}" -ne "") {
+          $ver = "${{ inputs.version }}"
+        } else {
+          $ver = "0.0.0-dev"
+        }
+        echo "VERSION=$ver" >> $env:GITHUB_OUTPUT
+        echo "Resolved version: $ver"
+
+    # ── 3. Setup .NET 8 SDK ───────────────────────────────────────────────────
+    - name: Setup .NET 8
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '8.0.x'
+
+    # ── 4. Cache NuGet packages ───────────────────────────────────────────────
+    - name: Cache NuGet
+      uses: actions/cache@v4
+      with:
+        path: ~/.nuget/packages
+        key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj') }}
+        restore-keys: nuget-${{ runner.os }}-
+
+    # ── 5. Restore dependencies ───────────────────────────────────────────────
+    - name: Restore NuGet packages
+      run: dotnet restore WpfVideoPlayer.csproj -r win-x64
+
+    # ── 6. Build & Publish (self-contained = false, framework-dependent) ──────
+    #   Produces a folder with EXE + all native VLC DLLs.
+    #   Users only need .NET 8 Desktop Runtime (~55 MB) — no full SDK.
+    - name: Publish (framework-dependent)
+      run: |
+        dotnet publish WpfVideoPlayer.csproj `
+          -c Release `
+          -r win-x64 `
+          --self-contained false `
+          -p:PublishSingleFile=false `
+          -p:Version=${{ steps.version.outputs.VERSION }} `
+          -p:FileVersion=${{ steps.version.outputs.VERSION }}.0 `
+          -p:AssemblyVersion=${{ steps.version.outputs.VERSION }}.0 `
+          -o publish
+      shell: pwsh
+
+    # ── 7. Verify publish output ──────────────────────────────────────────────
+    - name: Verify publish output
+      shell: pwsh
+      run: |
+        $exe = "publish\WpfVideoPlayer.exe"
+        if (-not (Test-Path $exe)) {
+          Write-Error "EXE not found at $exe"
+          exit 1
+        }
+        Write-Host "Publish contents:"
+        Get-ChildItem publish | Format-Table Name, Length -AutoSize
+
+    # ── 8. Install Inno Setup ─────────────────────────────────────────────────
+    - name: Install Inno Setup 6
+      shell: pwsh
+      run: |
+        $url  = "https://jrsoftware.org/download.php/is.exe"
+        $dest = "$env:TEMP\innosetup.exe"
+        Invoke-WebRequest -Uri $url -OutFile $dest -UseBasicParsing
+        Start-Process -FilePath $dest -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART" -Wait
+        # Add iscc.exe to PATH for subsequent steps
+        $isccDir = "C:\Program Files (x86)\Inno Setup 6"
+        echo "$isccDir" | Out-File -Append -Encoding utf8 $env:GITHUB_PATH
+        Write-Host "Inno Setup installed at $isccDir"
+
+    # ── 9. Compile installer ──────────────────────────────────────────────────
+    - name: Compile Inno Setup installer
+      shell: pwsh
+      env:
+        APP_VERSION: ${{ steps.version.outputs.VERSION }}
+      run: |
+        New-Item -ItemType Directory -Force -Path installer_output | Out-Null
+        & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" `
+          /DMyAppVersion=$env:APP_VERSION `
+          installer\setup.iss
+        if ($LASTEXITCODE -ne 0) {
+          Write-Error "Inno Setup compilation failed (exit $LASTEXITCODE)"
+          exit 1
+        }
+        Write-Host "Installer output:"
+        Get-ChildItem installer_output | Format-Table Name, Length -AutoSize
+
+    # ── 10. Locate installer file ─────────────────────────────────────────────
+    - name: Locate installer artifact
+      id: installer
+      shell: pwsh
+      run: |
+        $file = Get-ChildItem installer_output\*.exe | Select-Object -First 1
+        if (-not $file) { Write-Error "No installer EXE found"; exit 1 }
+        echo "PATH=$($file.FullName)" >> $env:GITHUB_OUTPUT
+        echo "NAME=$($file.Name)"     >> $env:GITHUB_OUTPUT
+        Write-Host "Installer: $($file.FullName) ($([math]::Round($file.Length/1MB,1)) MB)"
+
+    # ── 11. Upload installer as workflow artifact (always available) ──────────
+    - name: Upload installer artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: VPlayer-Installer-${{ steps.version.outputs.VERSION }}
+        path: ${{ steps.installer.outputs.PATH }}
+        retention-days: 30
+
+    # ── 12. Create GitHub Release (tag pushes only) ───────────────────────────
+    - name: Create GitHub Release
+      if: github.event_name == 'push' && github.ref_type == 'tag'
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: ${{ github.ref_name }}
+        name: VPlayer ${{ github.ref_name }}
+        draft: false
+        prerelease: ${{ contains(github.ref_name, '-') }}  # v1.0.0-beta → prerelease
+        body: |
+          ## VPlayer ${{ github.ref_name }}
+
+          ### 📥 Cài đặt
+          Tải file **`${{ steps.installer.outputs.NAME }}`** bên dưới và chạy.
+
+          **Yêu cầu:** Windows 10/11 (x64) + [.NET 8 Desktop Runtime](https://dotnet.microsoft.com/en-us/download/dotnet/8.0)
+
+          ### 🎬 Định dạng hỗ trợ
+          MP4, MKV, AVI, MOV, WMV, FLV, WebM, M4V, TS, VOB, OGV, 3GP, RMVB, HEVC/H.265 và nhiều hơn nữa (LibVLC engine)
+
+          ### ⌨️ Phím tắt
+          | Phím | Chức năng |
+          |------|-----------|
+          | `Space` | Play / Pause |
+          | `F` | Toàn màn hình |
+          | `M` | Tắt/bật âm |
+          | `Ctrl+O` | Mở file |
+          | `↑` / `↓` | Âm lượng |
+
+          ---
+          *Built from commit ${{ github.sha }}*
+        files: |
+          ${{ steps.installer.outputs.PATH }}
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
