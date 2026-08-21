@@ -8,6 +8,7 @@ using System.Windows.Input;
 using System.Windows.Threading;
 using LibVLCSharp.Shared;
 using WpfVideoPlayer.Models;
+using WpfVideoPlayer.Services;
 
 namespace WpfVideoPlayer.ViewModels;
 
@@ -16,6 +17,10 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     // ── LibVLC core ──────────────────────────────────────────────────────────
     private LibVLC? _libVLC;
     private MediaPlayer? _mediaPlayer;
+
+    // ── Motion detection service ─────────────────────────────────────────────
+    private readonly MotionDetectionService _motionService = new();
+    private CancellationTokenSource? _scanCts;
 
     // ── UI timer ─────────────────────────────────────────────────────────────
     private readonly DispatcherTimer _uiTimer;
@@ -39,11 +44,20 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     private string _statusText = "Chào mừng đến với VPlayer";
     private string _currentTitle = "Chưa có video";
     private string _videoInfo = "";
+    private string _currentFilePath = "";
     private int _selectedPlaylistIndex = -1;
+
+    // ── Motion Detection fields ───────────────────────────────────────────────
+    private bool _isScanning;
+    private double _scanProgress;
+    private string _scanStatusText = "Chưa quét chuyển động";
+    private bool _autoScanOnOpen = true;
+    private int _activeSidebarTabIndex = 0; // 0 = Playlist, 1 = Motion Bookmarks
 
     public static readonly double[] AvailableSpeeds = { 0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0, 2.5, 3.0, 4.0 };
 
     public ObservableCollection<PlaylistItem> Playlist { get; } = new();
+    public ObservableCollection<MotionBookmark> Bookmarks { get; } = new();
 
     // ── Public properties ─────────────────────────────────────────────────────
     public MediaPlayer? MediaPlayer => _mediaPlayer;
@@ -57,6 +71,13 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     public bool IsPlaylistVisible { get => _isPlaylistVisible; set => Set(ref _isPlaylistVisible, value); }
     public bool IsRepeat { get => _isRepeat; set => Set(ref _isRepeat, value); }
     public bool IsShuffle { get => _isShuffle; set => Set(ref _isShuffle, value); }
+
+    public bool IsScanning { get => _isScanning; private set => Set(ref _isScanning, value); }
+    public double ScanProgress { get => _scanProgress; private set => Set(ref _scanProgress, value); }
+    public string ScanStatusText { get => _scanStatusText; private set => Set(ref _scanStatusText, value); }
+    public bool AutoScanOnOpen { get => _autoScanOnOpen; set => Set(ref _autoScanOnOpen, value); }
+    public int ActiveSidebarTabIndex { get => _activeSidebarTabIndex; set => Set(ref _activeSidebarTabIndex, value); }
+    public string CurrentFilePath { get => _currentFilePath; private set => Set(ref _currentFilePath, value); }
 
     public double PlaybackSpeed
     {
@@ -132,6 +153,11 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     public ICommand SetSpeedCommand { get; }
     public ICommand SpeedUpCommand { get; }
     public ICommand SpeedDownCommand { get; }
+    public ICommand ScanMotionCommand { get; }
+    public ICommand CancelScanCommand { get; }
+    public ICommand JumpToBookmarkCommand { get; }
+    public ICommand ClearBookmarksCommand { get; }
+    public ICommand SwitchSidebarTabCommand { get; }
     public ICommand RemoveFromPlaylistCommand { get; }
     public ICommand ClearPlaylistCommand { get; }
     public ICommand VolumeUpCommand { get; }
@@ -159,6 +185,15 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         SetSpeedCommand      = new RelayCommand<object>(SetSpeed);
         SpeedUpCommand       = new RelayCommand(SpeedUp);
         SpeedDownCommand     = new RelayCommand(SpeedDown);
+        ScanMotionCommand    = new RelayCommand(() => _ = StartMotionScan(), () => HasMedia && !IsScanning);
+        CancelScanCommand    = new RelayCommand(CancelMotionScan, () => IsScanning);
+        JumpToBookmarkCommand = new RelayCommand<MotionBookmark>(JumpToBookmark);
+        ClearBookmarksCommand = new RelayCommand(ClearBookmarks);
+        SwitchSidebarTabCommand = new RelayCommand<object>(param =>
+        {
+            if (param != null && int.TryParse(param.ToString(), out int tab))
+                ActiveSidebarTabIndex = tab;
+        });
         RemoveFromPlaylistCommand = new RelayCommand<PlaylistItem>(RemoveFromPlaylist);
         ClearPlaylistCommand = new RelayCommand(ClearPlaylist, () => Playlist.Count > 0);
         VolumeUpCommand      = new RelayCommand(() => Volume = Math.Min(200, Volume + 5));
@@ -206,6 +241,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
 
         IsLoading = true;
         StatusText = "Đang tải...";
+        CurrentFilePath = path;
 
         var media = new Media(_libVLC, path, FromType.FromPath);
         _mediaPlayer.Media = media;
@@ -218,6 +254,12 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         // Mark current item in playlist
         for (int i = 0; i < Playlist.Count; i++)
             Playlist[i].IsCurrentlyPlaying = Playlist[i].FilePath == path;
+
+        // Auto scan motion bookmarks if enabled
+        if (AutoScanOnOpen)
+        {
+            _ = StartMotionScan(path);
+        }
     }
 
     private void PlayPause()
@@ -481,6 +523,81 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
             : $"{ts.Minutes}:{ts.Seconds:D2}";
     }
 
+    // ── Motion Detection ──────────────────────────────────────────────────────
+    public async Task StartMotionScan(string? path = null)
+    {
+        string target = path ?? _currentFilePath;
+        if (string.IsNullOrEmpty(target) || !File.Exists(target))
+        {
+            ScanStatusText = "Chưa có video để quét";
+            return;
+        }
+
+        _scanCts?.Cancel();
+        _scanCts = new CancellationTokenSource();
+        var token = _scanCts.Token;
+
+        IsScanning = true;
+        ScanProgress = 0;
+        ScanStatusText = "Đang phân tích khung hình chuyển động...";
+        Bookmarks.Clear();
+
+        try
+        {
+            var progress = new Progress<double>(p =>
+            {
+                ScanProgress = p;
+                ScanStatusText = $"Đang quét chuyển động: {p:0.#}%";
+            });
+
+            var results = await _motionService.ScanVideoAsync(target, progress, token);
+
+            Bookmarks.Clear();
+            foreach (var bm in results)
+            {
+                Bookmarks.Add(bm);
+            }
+
+            ScanStatusText = Bookmarks.Count > 0
+                ? $"Đã phát hiện {Bookmarks.Count} mốc chuyển động"
+                : "Không phát hiện chuyển động đáng kể";
+            StatusText = $"Phát hiện {Bookmarks.Count} cảnh chuyển động";
+        }
+        catch (OperationCanceledException)
+        {
+            ScanStatusText = "Đã hủy quét chuyển động";
+        }
+        catch (Exception ex)
+        {
+            ScanStatusText = $"Lỗi khi quét: {ex.Message}";
+        }
+        finally
+        {
+            IsScanning = false;
+        }
+    }
+
+    public void CancelMotionScan()
+    {
+        _scanCts?.Cancel();
+        IsScanning = false;
+        ScanStatusText = "Đã hủy quét";
+    }
+
+    public void JumpToBookmark(MotionBookmark? bookmark)
+    {
+        if (bookmark == null || _mediaPlayer == null) return;
+        _mediaPlayer.Time = (long)(bookmark.TimeSeconds * 1000);
+        StatusText = $"Nhảy tới {bookmark.TimeText} - {bookmark.Title}";
+    }
+
+    public void ClearBookmarks()
+    {
+        _scanCts?.Cancel();
+        Bookmarks.Clear();
+        ScanStatusText = "Đã xóa danh sách bookmark";
+    }
+
     // ── INotifyPropertyChanged ────────────────────────────────────────────────
     public event PropertyChangedEventHandler? PropertyChanged;
     protected void OnPropertyChanged([CallerMemberName] string? name = null)
@@ -494,6 +611,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     // ── IDisposable ───────────────────────────────────────────────────────────
     public void Dispose()
     {
+        _scanCts?.Cancel();
         _uiTimer.Stop();
         if (_mediaPlayer != null)
         {

@@ -19,6 +19,9 @@
         <conv:BoolToAccentBrushConverter x:Key="AccentBrush"/>
         <conv:BoolToFullscreenIconConverter x:Key="FullscreenConv"/>
         <conv:BoolToPlaylistWidthConverter x:Key="PlaylistWidthConv"/>
+        <conv:NormalizedToLeftConverter x:Key="NormToLeftConv"/>
+        <conv:EqualityToVisibilityConverter x:Key="EqToVis"/>
+        <conv:StringToSolidBrushConverter x:Key="StrToBrush"/>
     </Window.Resources>
 
     <Window.InputBindings>
@@ -147,85 +150,227 @@
                 </Grid>
             </Border>
 
-            <!-- Playlist panel -->
+            <!-- Sidebar Panel (Playlist & Motion Bookmarks) -->
             <Border Grid.Column="1" Background="{StaticResource BrushBgPanel}"
                     BorderBrush="{StaticResource BrushBorder}" BorderThickness="1,0,0,0"
                     Visibility="{Binding IsPlaylistVisible, Converter={StaticResource BoolToVis}}">
                 <Grid>
                     <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="*"/>
-                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/> <!-- Tab Headers -->
+                        <RowDefinition Height="*"/>    <!-- Tab Content -->
+                        <RowDefinition Height="Auto"/> <!-- Bottom Actions -->
                     </Grid.RowDefinitions>
 
-                    <!-- Playlist header -->
-                    <Border Grid.Row="0" Padding="12,10"
-                            BorderBrush="{StaticResource BrushBorder}" BorderThickness="0,0,0,1">
+                    <!-- ── Tab Headers ─────────────────────────────────────────── -->
+                    <Border Grid.Row="0" Padding="8,8" BorderBrush="{StaticResource BrushBorder}" BorderThickness="0,0,0,1">
                         <Grid>
-                            <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="☰ Danh sách phát" FontSize="13" FontWeight="SemiBold"
-                                           Foreground="{StaticResource BrushTextPrimary}" VerticalAlignment="Center"/>
-                                <Border Background="{StaticResource BrushAccent}" CornerRadius="10" 
-                                        Padding="6,1" Margin="8,0,0,0" VerticalAlignment="Center">
-                                    <TextBlock Text="{Binding Playlist.Count}" FontSize="11"
-                                               Foreground="{StaticResource BrushTextPrimary}"/>
-                                </Border>
-                            </StackPanel>
-                            <Button Content="🗑" Style="{StaticResource IconButtonStyle}"
-                                    HorizontalAlignment="Right" Padding="6" FontSize="13"
-                                    Command="{Binding ClearPlaylistCommand}"
-                                    ToolTip="Xóa tất cả"/>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+
+                            <!-- Playlist Tab Button -->
+                            <Button Grid.Column="0" Command="{Binding SwitchSidebarTabCommand}" CommandParameter="0"
+                                    Style="{StaticResource SpeedButtonStyle}" Margin="2,0" Padding="8,6">
+                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                    <TextBlock Text="☰ Playlist" FontSize="12" FontWeight="SemiBold"
+                                               Foreground="{Binding ActiveSidebarTabIndex, Converter={StaticResource EqToVis}, ConverterParameter=0, TargetNullValue={StaticResource BrushTextSecondary}}"/>
+                                    <Border Background="{StaticResource BrushAccent}" CornerRadius="8" 
+                                            Padding="5,1" Margin="6,0,0,0" VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding Playlist.Count}" FontSize="10" FontWeight="Bold"
+                                                   Foreground="{StaticResource BrushTextPrimary}"/>
+                                    </Border>
+                                </StackPanel>
+                            </Button>
+
+                            <!-- Motion Bookmarks Tab Button -->
+                            <Button Grid.Column="1" Command="{Binding SwitchSidebarTabCommand}" CommandParameter="1"
+                                    Style="{StaticResource SpeedButtonStyle}" Margin="2,0" Padding="8,6">
+                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                    <TextBlock Text="🏃 Chuyển động" FontSize="12" FontWeight="SemiBold"
+                                               Foreground="{Binding ActiveSidebarTabIndex, Converter={StaticResource EqToVis}, ConverterParameter=1, TargetNullValue={StaticResource BrushTextSecondary}}"/>
+                                    <Border Background="#FF4757" CornerRadius="8" 
+                                            Padding="5,1" Margin="6,0,0,0" VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding Bookmarks.Count}" FontSize="10" FontWeight="Bold"
+                                                   Foreground="{StaticResource BrushTextPrimary}"/>
+                                    </Border>
+                                </StackPanel>
+                            </Button>
                         </Grid>
                     </Border>
 
-                    <!-- Playlist items -->
-                    <ListBox Grid.Row="1" x:Name="PlaylistBox"
-                             ItemsSource="{Binding Playlist}"
-                             SelectedIndex="{Binding SelectedPlaylistIndex}"
-                             Background="Transparent" BorderThickness="0"
-                             ItemContainerStyle="{StaticResource PlaylistItemStyle}"
-                             ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-                             VirtualizingPanel.IsVirtualizing="True">
-                        <ListBox.ItemTemplate>
-                            <DataTemplate DataType="{x:Type models:PlaylistItem}">
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="Auto"/>
-                                    </Grid.ColumnDefinitions>
-                                    <StackPanel Grid.Column="0">
-                                        <TextBlock Text="{Binding FileNameWithoutExt}"
-                                                   FontSize="12" TextTrimming="CharacterEllipsis"
-                                                   Foreground="{StaticResource BrushTextPrimary}"/>
-                                        <TextBlock Text="{Binding Duration}"
-                                                   FontSize="10" Foreground="{StaticResource BrushTextSecondary}"
-                                                   Margin="0,2,0,0"/>
-                                    </StackPanel>
-                                    <Button Grid.Column="1" Content="✕" FontSize="10"
-                                            Style="{StaticResource IconButtonStyle}" Padding="4"
-                                            Visibility="Hidden" x:Name="removeBtn"
-                                            CommandParameter="{Binding}"
-                                            Command="{Binding DataContext.RemoveFromPlaylistCommand, RelativeSource={RelativeSource AncestorType=ListBox}}"/>
-                                </Grid>
-                                <DataTemplate.Triggers>
-                                    <DataTrigger Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType=ListBoxItem}}" Value="True">
-                                        <Setter TargetName="removeBtn" Property="Visibility" Value="Visible"/>
-                                    </DataTrigger>
-                                </DataTemplate.Triggers>
-                            </DataTemplate>
-                        </ListBox.ItemTemplate>
-                    </ListBox>
+                    <!-- ── TAB 0: PLAYLIST ─────────────────────────────────────── -->
+                    <Grid Grid.Row="1" Visibility="{Binding ActiveSidebarTabIndex, Converter={StaticResource EqToVis}, ConverterParameter=0}">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="*"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
 
-                    <!-- Add to playlist buttons -->
-                    <Border Grid.Row="2" Padding="8,8"
-                            BorderBrush="{StaticResource BrushBorder}" BorderThickness="0,1,0,0">
-                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                            <Button Content="+ File" Style="{StaticResource PrimaryButtonStyle}"
-                                    Command="{Binding OpenFileCommand}" Margin="4,0" Padding="12,6" FontSize="12"/>
-                            <Button Content="+ Folder" Style="{StaticResource PrimaryButtonStyle}"
-                                    Command="{Binding OpenFolderCommand}" Margin="4,0" Padding="12,6" FontSize="12"/>
-                        </StackPanel>
-                    </Border>
+                        <!-- Playlist items -->
+                        <ListBox Grid.Row="0" x:Name="PlaylistBox"
+                                 ItemsSource="{Binding Playlist}"
+                                 SelectedIndex="{Binding SelectedPlaylistIndex}"
+                                 Background="Transparent" BorderThickness="0"
+                                 ItemContainerStyle="{StaticResource PlaylistItemStyle}"
+                                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                 VirtualizingPanel.IsVirtualizing="True">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate DataType="{x:Type models:PlaylistItem}">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel Grid.Column="0">
+                                            <TextBlock Text="{Binding FileNameWithoutExt}"
+                                                       FontSize="12" TextTrimming="CharacterEllipsis"
+                                                       Foreground="{StaticResource BrushTextPrimary}"/>
+                                            <TextBlock Text="{Binding Duration}"
+                                                       FontSize="10" Foreground="{StaticResource BrushTextSecondary}"
+                                                       Margin="0,2,0,0"/>
+                                        </StackPanel>
+                                        <Button Grid.Column="1" Content="✕" FontSize="10"
+                                                Style="{StaticResource IconButtonStyle}" Padding="4"
+                                                Visibility="Hidden" x:Name="removeBtn"
+                                                CommandParameter="{Binding}"
+                                                Command="{Binding DataContext.RemoveFromPlaylistCommand, RelativeSource={RelativeSource AncestorType=ListBox}}"/>
+                                    </Grid>
+                                    <DataTemplate.Triggers>
+                                        <DataTrigger Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType=ListBoxItem}}" Value="True">
+                                            <Setter TargetName="removeBtn" Property="Visibility" Value="Visible"/>
+                                        </DataTrigger>
+                                    </DataTemplate.Triggers>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+
+                        <!-- Add to playlist buttons -->
+                        <Border Grid.Row="1" Padding="8,8"
+                                BorderBrush="{StaticResource BrushBorder}" BorderThickness="0,1,0,0">
+                            <Grid>
+                                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                    <Button Content="+ File" Style="{StaticResource PrimaryButtonStyle}"
+                                            Command="{Binding OpenFileCommand}" Margin="4,0" Padding="12,6" FontSize="12"/>
+                                    <Button Content="+ Folder" Style="{StaticResource PrimaryButtonStyle}"
+                                            Command="{Binding OpenFolderCommand}" Margin="4,0" Padding="12,6" FontSize="12"/>
+                                </StackPanel>
+                                <Button Content="🗑" Style="{StaticResource IconButtonStyle}"
+                                        HorizontalAlignment="Right" Padding="6" FontSize="13"
+                                        Command="{Binding ClearPlaylistCommand}"
+                                        ToolTip="Xóa tất cả playlist"/>
+                            </Grid>
+                        </Border>
+                    </Grid>
+
+                    <!-- ── TAB 1: MOTION BOOKMARKS ─────────────────────────────── -->
+                    <Grid Grid.Row="1" Visibility="{Binding ActiveSidebarTabIndex, Converter={StaticResource EqToVis}, ConverterParameter=1}">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/> <!-- Scan Toolbar -->
+                            <RowDefinition Height="Auto"/> <!-- Progress / Status -->
+                            <RowDefinition Height="*"/>    <!-- Bookmarks List -->
+                        </Grid.RowDefinitions>
+
+                        <!-- Motion scan toolbar -->
+                        <Border Grid.Row="0" Padding="10,8" BorderBrush="{StaticResource BrushBorder}" BorderThickness="0,0,0,1">
+                            <Grid>
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                    <!-- Scan button -->
+                                    <Button Style="{StaticResource PrimaryButtonStyle}" Padding="10,5" FontSize="11"
+                                            Command="{Binding ScanMotionCommand}"
+                                            Visibility="{Binding IsScanning, Converter={StaticResource BoolToVisInv}}"
+                                            ToolTip="Phân tích lại chuyển động video này">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="🔍 " FontSize="11"/>
+                                            <TextBlock Text="Quét cảnh" FontSize="11" FontWeight="SemiBold"/>
+                                        </StackPanel>
+                                    </Button>
+
+                                    <!-- Cancel button -->
+                                    <Button Style="{StaticResource PrimaryButtonStyle}" Background="#CC3333" Padding="10,5" FontSize="11"
+                                            Command="{Binding CancelScanCommand}"
+                                            Visibility="{Binding IsScanning, Converter={StaticResource BoolToVis}}"
+                                            ToolTip="Dừng tiến trình quét">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="⏹ " FontSize="11"/>
+                                            <TextBlock Text="Hủy" FontSize="11" FontWeight="SemiBold"/>
+                                        </StackPanel>
+                                    </Button>
+
+                                    <!-- Auto scan toggle -->
+                                    <CheckBox IsChecked="{Binding AutoScanOnOpen}" Margin="10,0,0,0" VerticalAlignment="Center"
+                                              ToolTip="Tự động nhận diện chuyển động khi mở video mới">
+                                        <TextBlock Text="Tự quét" FontSize="11" Foreground="{StaticResource BrushTextSecondary}"/>
+                                    </CheckBox>
+                                </StackPanel>
+
+                                <!-- Clear bookmarks button -->
+                                <Button Content="🗑" Style="{StaticResource IconButtonStyle}"
+                                        HorizontalAlignment="Right" Padding="6" FontSize="13"
+                                        Command="{Binding ClearBookmarksCommand}"
+                                        ToolTip="Xóa tất cả bookmark"/>
+                            </Grid>
+                        </Border>
+
+                        <!-- Progress Bar & Status Text -->
+                        <Border Grid.Row="1" Padding="10,6" Background="{StaticResource BrushBgCard}"
+                                BorderBrush="{StaticResource BrushBorder}" BorderThickness="0,0,0,1">
+                            <StackPanel>
+                                <ProgressBar Style="{StaticResource ScanProgressBarStyle}"
+                                             Value="{Binding ScanProgress}" Maximum="100"
+                                             Visibility="{Binding IsScanning, Converter={StaticResource BoolToVis}}"
+                                             Margin="0,0,0,4"/>
+                                <TextBlock Text="{Binding ScanStatusText}" FontSize="11"
+                                           Foreground="{StaticResource BrushTextSecondary}"
+                                           TextTrimming="CharacterEllipsis"/>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Bookmarks items list -->
+                        <ListBox Grid.Row="2"
+                                 ItemsSource="{Binding Bookmarks}"
+                                 Background="Transparent" BorderThickness="0"
+                                 ItemContainerStyle="{StaticResource PlaylistItemStyle}"
+                                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                 VirtualizingPanel.IsVirtualizing="True">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate DataType="{x:Type models:MotionBookmark}">
+                                    <Grid Margin="0,2">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+
+                                        <!-- Badge icon -->
+                                        <Border Grid.Column="0" Width="30" Height="30" CornerRadius="15"
+                                                Background="{Binding BadgeColor, Converter={StaticResource StrToBrush}}"
+                                                VerticalAlignment="Center" Margin="0,0,10,0">
+                                            <TextBlock Text="{Binding Icon}" FontSize="14" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                        </Border>
+
+                                        <!-- Info -->
+                                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding Title}" FontSize="12" FontWeight="SemiBold"
+                                                       Foreground="{StaticResource BrushTextPrimary}" TextTrimming="CharacterEllipsis"/>
+                                            <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
+                                                <TextBlock Text="{Binding TimeText}" FontSize="11" FontFamily="Consolas"
+                                                           Foreground="{StaticResource BrushAccentLight}"/>
+                                                <TextBlock Text="{Binding DurationSeconds, StringFormat=' · ~{0:0.#}s'}" FontSize="10"
+                                                           Foreground="{StaticResource BrushTextSecondary}"/>
+                                            </StackPanel>
+                                        </StackPanel>
+
+                                        <!-- Jump button -->
+                                        <Button Grid.Column="2" Content="▶" FontSize="12"
+                                                Style="{StaticResource IconButtonStyle}" Padding="8,4"
+                                                Command="{Binding DataContext.JumpToBookmarkCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                CommandParameter="{Binding}"
+                                                ToolTip="Nhảy ngay tới cảnh này"/>
+                                    </Grid>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </Grid>
                 </Grid>
             </Border>
         </Grid>
@@ -250,12 +395,60 @@
                     <TextBlock Grid.Column="0" Text="{Binding CurrentTimeText}" FontSize="11" FontFamily="Consolas"
                                Foreground="{StaticResource BrushTextSecondary}" VerticalAlignment="Center"
                                Margin="0,0,10,0" MinWidth="50"/>
-                    <Slider Grid.Column="1" Style="{StaticResource SeekBarStyle}"
-                            Minimum="0" Maximum="1" Value="{Binding Position, Mode=TwoWay}"
-                            VerticalAlignment="Center"
-                            IsEnabled="{Binding HasMedia}"
-                            MouseLeftButtonDown="SeekBar_PreviewMouseDown"
-                            PreviewMouseLeftButtonUp="SeekBar_PreviewMouseUp"/>
+
+                    <!-- Seek Bar + Motion Bookmarks Overlay -->
+                    <Grid Grid.Column="1" VerticalAlignment="Center">
+                        <!-- Main Seek Slider -->
+                        <Slider Style="{StaticResource SeekBarStyle}"
+                                Minimum="0" Maximum="1" Value="{Binding Position, Mode=TwoWay}"
+                                VerticalAlignment="Center"
+                                IsEnabled="{Binding HasMedia}"
+                                MouseLeftButtonDown="SeekBar_PreviewMouseDown"
+                                PreviewMouseLeftButtonUp="SeekBar_PreviewMouseUp"/>
+
+                        <!-- Bookmarks Pins Overlay -->
+                        <ItemsControl ItemsSource="{Binding Bookmarks}"
+                                      IsHitTestVisible="True"
+                                      VerticalAlignment="Center"
+                                      Margin="0,-16,0,0">
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <Canvas Height="24" IsItemsHost="True" ClipToBounds="False"/>
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemContainerStyle>
+                                <Style TargetType="ContentPresenter">
+                                    <Setter Property="Canvas.Left">
+                                        <Setter.Value>
+                                            <MultiBinding Converter="{StaticResource NormToLeftConv}" ConverterParameter="8">
+                                                <Binding Path="NormalizedPosition"/>
+                                                <Binding Path="ActualWidth" RelativeSource="{RelativeSource AncestorType=Canvas}"/>
+                                            </MultiBinding>
+                                        </Setter.Value>
+                                    </Setter>
+                                </Style>
+                            </ItemsControl.ItemContainerStyle>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="{x:Type models:MotionBookmark}">
+                                    <Button Style="{StaticResource TimelineBookmarkPinStyle}"
+                                            Command="{Binding DataContext.JumpToBookmarkCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                            CommandParameter="{Binding}"
+                                            ToolTip="{Binding Description}">
+                                        <Grid>
+                                            <Border Width="16" Height="16" CornerRadius="8"
+                                                    Background="{Binding BadgeColor, Converter={StaticResource StrToBrush}}"
+                                                    BorderBrush="#FFFFFF" BorderThickness="1.5"
+                                                    VerticalAlignment="Center" HorizontalAlignment="Center">
+                                                <TextBlock Text="{Binding Icon}" FontSize="9" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                           Margin="0,-1,0,0"/>
+                                            </Border>
+                                        </Grid>
+                                    </Button>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </Grid>
+
                     <TextBlock Grid.Column="2" Text="{Binding TotalTimeText}" FontSize="11" FontFamily="Consolas"
                                Foreground="{StaticResource BrushTextSecondary}" VerticalAlignment="Center"
                                Margin="10,0,0,0" MinWidth="50" TextAlignment="Right"/>
