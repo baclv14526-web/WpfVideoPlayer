@@ -59,8 +59,10 @@
                 <!-- App name + icon -->
                 <StackPanel Grid.Column="0" Orientation="Horizontal" 
                             VerticalAlignment="Center" Margin="14,0">
-                    <TextBlock Text="▶" FontSize="14" Foreground="{StaticResource BrushAccent}" 
-                               VerticalAlignment="Center" Margin="0,0,8,0"/>
+                    <ContentControl Style="{StaticResource VectorIconAccent}"
+                                    Content="{StaticResource IconAppLogo}"
+                                    Width="18" Height="18" Margin="0,0,8,0"
+                                    VerticalAlignment="Center"/>
                     <TextBlock Text="VPlayer" FontSize="14" FontWeight="SemiBold"
                                Foreground="{StaticResource BrushTextPrimary}" VerticalAlignment="Center"/>
                 </StackPanel>
@@ -73,11 +75,19 @@
 
                 <!-- Window controls -->
                 <StackPanel Grid.Column="2" Orientation="Horizontal" Margin="4,0">
-                    <Button Content="—" Style="{StaticResource IconButtonStyle}" FontSize="12"
-                            Padding="12,0" Height="40" Click="MinimizeButton_Click"/>
-                    <Button Content="□" Style="{StaticResource IconButtonStyle}" FontSize="12"
-                            Padding="12,0" Height="40" Click="MaximizeButton_Click"/>
-                    <Button Content="✕" Style="{StaticResource IconButtonStyle}" FontSize="12"
+                    <Button Style="{StaticResource IconButtonStyle}"
+                            Padding="12,0" Height="40" Click="MinimizeButton_Click">
+                        <ContentControl Style="{StaticResource VectorIcon}"
+                                        Content="{StaticResource IconMinimize}"
+                                        Width="14" Height="14"/>
+                    </Button>
+                    <Button x:Name="MaxRestoreBtn" Style="{StaticResource IconButtonStyle}"
+                            Padding="12,0" Height="40" Click="MaximizeButton_Click">
+                        <ContentControl Style="{StaticResource VectorIcon}"
+                                        Content="{StaticResource IconMaximize}"
+                                        Width="13" Height="13"/>
+                    </Button>
+                    <Button Style="{StaticResource IconButtonStyle}"
                             Padding="12,0" Height="40" Click="CloseButton_Click">
                         <Button.Triggers>
                             <EventTrigger RoutedEvent="Button.MouseEnter">
@@ -89,6 +99,9 @@
                                 </BeginStoryboard>
                             </EventTrigger>
                         </Button.Triggers>
+                        <ContentControl Style="{StaticResource VectorIcon}"
+                                        Content="{StaticResource IconClose}"
+                                        Width="14" Height="14"/>
                     </Button>
                 </StackPanel>
             </Grid>
@@ -114,17 +127,27 @@
                             Visibility="{Binding HasMedia, Converter={StaticResource BoolToVisInv}}"
                             IsHitTestVisible="False">
                         <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-                            <TextBlock Text="🎬" FontSize="64" HorizontalAlignment="Center"/>
+                            <ContentControl Style="{StaticResource VectorIconAccent}"
+                                            Content="{StaticResource IconFilm}"
+                                            Width="72" Height="72"
+                                            HorizontalAlignment="Center" Opacity="0.7"/>
                             <TextBlock Text="Kéo thả video vào đây" FontSize="20" FontWeight="Light"
                                        Foreground="{StaticResource BrushTextSecondary}"
-                                       HorizontalAlignment="Center" Margin="0,16,0,8"/>
+                                       HorizontalAlignment="Center" Margin="0,20,0,8"/>
                             <TextBlock Text="MP4 · MKV · AVI · MOV · WMV · FLV · WebM · và nhiều hơn nữa"
                                        FontSize="12" Foreground="{StaticResource BrushTextSecondary}"
                                        HorizontalAlignment="Center" Opacity="0.6"/>
-                            <Button Content="  📂  Mở file video" Margin="0,24,0,0"
+                            <Button Margin="0,24,0,0"
                                     Style="{StaticResource PrimaryButtonStyle}"
                                     Command="{Binding OpenFileCommand}"
-                                    HorizontalAlignment="Center" Padding="24,10" FontSize="14"/>
+                                    HorizontalAlignment="Center" Padding="24,10" FontSize="14">
+                                <StackPanel Orientation="Horizontal">
+                                    <ContentControl Style="{StaticResource VectorIcon}"
+                                                    Content="{StaticResource IconOpenFolder}"
+                                                    Width="16" Height="16" Margin="0,0,8,0"/>
+                                    <TextBlock Text="Mở file video" VerticalAlignment="Center"/>
+                                </StackPanel>
+                            </Button>
                         </StackPanel>
                     </Border>
 
@@ -133,10 +156,13 @@
                             Visibility="{Binding IsLoading, Converter={StaticResource BoolToVis}}"
                             IsHitTestVisible="False">
                         <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-                            <TextBlock Text="⏳" FontSize="40" HorizontalAlignment="Center"/>
+                            <ContentControl Style="{StaticResource VectorIconAccent}"
+                                            Content="{StaticResource IconLoading}"
+                                            Width="48" Height="48"
+                                            HorizontalAlignment="Center"/>
                             <TextBlock Text="Đang tải..." FontSize="14" 
                                        Foreground="{StaticResource BrushTextSecondary}"
-                                       HorizontalAlignment="Center" Margin="0,8,0,0"/>
+                                       HorizontalAlignment="Center" Margin="0,12,0,0"/>
                         </StackPanel>
                     </Border>
 
@@ -173,7 +199,11 @@
                             <Button Grid.Column="0" Command="{Binding SwitchSidebarTabCommand}" CommandParameter="0"
                                     Style="{StaticResource SpeedButtonStyle}" Margin="2,0" Padding="8,6">
                                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                                    <TextBlock Text="☰ Playlist" FontSize="12" FontWeight="SemiBold"
+                                    <ContentControl Style="{StaticResource VectorIcon}"
+                                                    Content="{StaticResource IconPlaylist}"
+                                                    Width="14" Height="14" Margin="0,0,5,0"
+                                                    Foreground="{Binding ActiveSidebarTabIndex, Converter={StaticResource EqToVis}, ConverterParameter=0, TargetNullValue={StaticResource BrushTextSecondary}}"/>
+                                    <TextBlock Text="Playlist" FontSize="12" FontWeight="SemiBold"
                                                Foreground="{Binding ActiveSidebarTabIndex, Converter={StaticResource EqToVis}, ConverterParameter=0, TargetNullValue={StaticResource BrushTextSecondary}}"/>
                                     <Border Background="{StaticResource BrushAccent}" CornerRadius="8" 
                                             Padding="5,1" Margin="6,0,0,0" VerticalAlignment="Center">
@@ -187,7 +217,11 @@
                             <Button Grid.Column="1" Command="{Binding SwitchSidebarTabCommand}" CommandParameter="1"
                                     Style="{StaticResource SpeedButtonStyle}" Margin="2,0" Padding="8,6">
                                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                                    <TextBlock Text="🏃 Chuyển động" FontSize="12" FontWeight="SemiBold"
+                                    <ContentControl Style="{StaticResource VectorIcon}"
+                                                    Content="{StaticResource IconMotion}"
+                                                    Width="14" Height="14" Margin="0,0,5,0"
+                                                    Foreground="{Binding ActiveSidebarTabIndex, Converter={StaticResource EqToVis}, ConverterParameter=1, TargetNullValue={StaticResource BrushTextSecondary}}"/>
+                                    <TextBlock Text="Chuyển động" FontSize="12" FontWeight="SemiBold"
                                                Foreground="{Binding ActiveSidebarTabIndex, Converter={StaticResource EqToVis}, ConverterParameter=1, TargetNullValue={StaticResource BrushTextSecondary}}"/>
                                     <Border Background="#FF4757" CornerRadius="8" 
                                             Padding="5,1" Margin="6,0,0,0" VerticalAlignment="Center">
@@ -229,11 +263,15 @@
                                                        FontSize="10" Foreground="{StaticResource BrushTextSecondary}"
                                                        Margin="0,2,0,0"/>
                                         </StackPanel>
-                                        <Button Grid.Column="1" Content="✕" FontSize="10"
-                                                Style="{StaticResource IconButtonStyle}" Padding="4"
+                                        <Button Grid.Column="1" Style="{StaticResource IconButtonStyle}" Padding="4"
                                                 Visibility="Hidden" x:Name="removeBtn"
                                                 CommandParameter="{Binding}"
-                                                Command="{Binding DataContext.RemoveFromPlaylistCommand, RelativeSource={RelativeSource AncestorType=ListBox}}"/>
+                                                Command="{Binding DataContext.RemoveFromPlaylistCommand, RelativeSource={RelativeSource AncestorType=ListBox}}">
+                                            <ContentControl Style="{StaticResource VectorIcon}"
+                                                            Content="{StaticResource IconClose}"
+                                                            Width="11" Height="11"
+                                                            Foreground="{StaticResource BrushTextSecondary}"/>
+                                        </Button>
                                     </Grid>
                                     <DataTemplate.Triggers>
                                         <DataTrigger Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType=ListBoxItem}}" Value="True">
@@ -249,15 +287,34 @@
                                 BorderBrush="{StaticResource BrushBorder}" BorderThickness="0,1,0,0">
                             <Grid>
                                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
-                                    <Button Content="+ File" Style="{StaticResource PrimaryButtonStyle}"
-                                            Command="{Binding OpenFileCommand}" Margin="4,0" Padding="12,6" FontSize="12"/>
-                                    <Button Content="+ Folder" Style="{StaticResource PrimaryButtonStyle}"
-                                            Command="{Binding OpenFolderCommand}" Margin="4,0" Padding="12,6" FontSize="12"/>
+                                    <Button Style="{StaticResource PrimaryButtonStyle}"
+                                            Command="{Binding OpenFileCommand}" Margin="4,0" Padding="12,6" FontSize="12">
+                                        <StackPanel Orientation="Horizontal">
+                                            <ContentControl Style="{StaticResource VectorIcon}"
+                                                            Content="{StaticResource IconOpenFile}"
+                                                            Width="13" Height="13" Margin="0,0,5,0"/>
+                                            <TextBlock Text="File" VerticalAlignment="Center"/>
+                                        </StackPanel>
+                                    </Button>
+                                    <Button Style="{StaticResource PrimaryButtonStyle}"
+                                            Command="{Binding OpenFolderCommand}" Margin="4,0" Padding="12,6" FontSize="12">
+                                        <StackPanel Orientation="Horizontal">
+                                            <ContentControl Style="{StaticResource VectorIcon}"
+                                                            Content="{StaticResource IconOpenFolder}"
+                                                            Width="13" Height="13" Margin="0,0,5,0"/>
+                                            <TextBlock Text="Folder" VerticalAlignment="Center"/>
+                                        </StackPanel>
+                                    </Button>
                                 </StackPanel>
-                                <Button Content="🗑" Style="{StaticResource IconButtonStyle}"
-                                        HorizontalAlignment="Right" Padding="6" FontSize="13"
+                                <Button Style="{StaticResource IconButtonStyle}"
+                                        HorizontalAlignment="Right" Padding="8"
                                         Command="{Binding ClearPlaylistCommand}"
-                                        ToolTip="Xóa tất cả playlist"/>
+                                        ToolTip="Xóa tất cả playlist">
+                                    <ContentControl Style="{StaticResource VectorIcon}"
+                                                    Content="{StaticResource IconTrash}"
+                                                    Width="16" Height="16"
+                                                    Foreground="#FF6B6B"/>
+                                </Button>
                             </Grid>
                         </Border>
                     </Grid>
@@ -280,8 +337,10 @@
                                             Visibility="{Binding IsScanning, Converter={StaticResource BoolToVisInv}}"
                                             ToolTip="Phân tích lại chuyển động video này">
                                         <StackPanel Orientation="Horizontal">
-                                            <TextBlock Text="🔍 " FontSize="11"/>
-                                            <TextBlock Text="Quét cảnh" FontSize="11" FontWeight="SemiBold"/>
+                                            <ContentControl Style="{StaticResource VectorIcon}"
+                                                            Content="{StaticResource IconSearch}"
+                                                            Width="13" Height="13" Margin="0,0,5,0"/>
+                                            <TextBlock Text="Quét cảnh" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center"/>
                                         </StackPanel>
                                     </Button>
 
@@ -291,8 +350,10 @@
                                             Visibility="{Binding IsScanning, Converter={StaticResource BoolToVis}}"
                                             ToolTip="Dừng tiến trình quét">
                                         <StackPanel Orientation="Horizontal">
-                                            <TextBlock Text="⏹ " FontSize="11"/>
-                                            <TextBlock Text="Hủy" FontSize="11" FontWeight="SemiBold"/>
+                                            <ContentControl Style="{StaticResource VectorIcon}"
+                                                            Content="{StaticResource IconCancelScan}"
+                                                            Width="13" Height="13" Margin="0,0,5,0"/>
+                                            <TextBlock Text="Hủy" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center"/>
                                         </StackPanel>
                                     </Button>
 
@@ -304,10 +365,15 @@
                                 </StackPanel>
 
                                 <!-- Clear bookmarks button -->
-                                <Button Content="🗑" Style="{StaticResource IconButtonStyle}"
-                                        HorizontalAlignment="Right" Padding="6" FontSize="13"
+                                <Button Style="{StaticResource IconButtonStyle}"
+                                        HorizontalAlignment="Right" Padding="8"
                                         Command="{Binding ClearBookmarksCommand}"
-                                        ToolTip="Xóa tất cả bookmark"/>
+                                        ToolTip="Xóa tất cả bookmark">
+                                    <ContentControl Style="{StaticResource VectorIcon}"
+                                                    Content="{StaticResource IconTrash}"
+                                                    Width="16" Height="16"
+                                                    Foreground="#FF6B6B"/>
+                                </Button>
                             </Grid>
                         </Border>
 
@@ -361,11 +427,14 @@
                                         </StackPanel>
 
                                         <!-- Jump button -->
-                                        <Button Grid.Column="2" Content="▶" FontSize="12"
-                                                Style="{StaticResource IconButtonStyle}" Padding="8,4"
+                                        <Button Grid.Column="2" Style="{StaticResource IconButtonStyle}" Padding="8,4"
                                                 Command="{Binding DataContext.JumpToBookmarkCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                                                 CommandParameter="{Binding}"
-                                                ToolTip="Nhảy ngay tới cảnh này"/>
+                                                ToolTip="Nhảy ngay tới cảnh này">
+                                            <ContentControl Style="{StaticResource VectorIconAccent}"
+                                                            Content="{StaticResource IconJump}"
+                                                            Width="16" Height="16"/>
+                                        </Button>
                                     </Grid>
                                 </DataTemplate>
                             </ListBox.ItemTemplate>
@@ -466,16 +535,22 @@
                     <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
                         <Button Style="{StaticResource IconButtonStyle}" 
                                 Command="{Binding OpenFileCommand}" ToolTip="Mở file (Ctrl+O)" Padding="10">
-                            <TextBlock Text="📂" FontSize="18"/>
+                            <ContentControl Style="{StaticResource VectorIcon}"
+                                            Content="{StaticResource IconOpenFile}"
+                                            Width="20" Height="20"/>
                         </Button>
                         <Button Style="{StaticResource IconButtonStyle}"
                                 Command="{Binding OpenFolderCommand}" ToolTip="Mở thư mục" Padding="10">
-                            <TextBlock Text="🗂" FontSize="18"/>
+                            <ContentControl Style="{StaticResource VectorIcon}"
+                                            Content="{StaticResource IconOpenFolder}"
+                                            Width="20" Height="20"/>
                         </Button>
                         <Button Style="{StaticResource IconButtonStyle}"
                                 Command="{Binding TogglePlaylistCommand}" ToolTip="Danh sách phát" Padding="10">
-                            <TextBlock Text="☰" FontSize="18"
-                                       Foreground="{Binding IsPlaylistVisible, Converter={StaticResource AccentBrush}}"/>
+                            <ContentControl Style="{StaticResource VectorIcon}"
+                                            Content="{StaticResource IconPlaylist}"
+                                            Width="20" Height="20"
+                                            Foreground="{Binding IsPlaylistVisible, Converter={StaticResource AccentBrush}}"/>
                         </Button>
                     </StackPanel>
 
@@ -485,35 +560,52 @@
                         <!-- Shuffle -->
                         <Button Style="{StaticResource IconButtonStyle}" Padding="8" Margin="2,0"
                                 Command="{Binding ToggleShuffleCommand}" ToolTip="Ngẫu nhiên">
-                            <TextBlock Text="🔀" FontSize="16"
-                                       Foreground="{Binding IsShuffle, Converter={StaticResource AccentBrush}}"/>
+                            <ContentControl Style="{StaticResource VectorIcon}"
+                                            Content="{StaticResource IconShuffle}"
+                                            Width="18" Height="18"
+                                            Foreground="{Binding IsShuffle, Converter={StaticResource AccentBrush}}"/>
                         </Button>
                         <!-- Previous -->
                         <Button Style="{StaticResource IconButtonStyle}" Padding="10" Margin="2,0"
                                 Command="{Binding PreviousCommand}" ToolTip="Video trước">
-                            <TextBlock Text="⏮" FontSize="20"/>
+                            <ContentControl Style="{StaticResource VectorIcon}"
+                                            Content="{StaticResource IconPrevious}"
+                                            Width="22" Height="22"/>
                         </Button>
                         <!-- Play/Pause - prominent -->
                         <Button Style="{StaticResource IconButtonStyle}" Padding="0" Margin="4,0"
                                 Command="{Binding PlayPauseCommand}" ToolTip="Phát/Tạm dừng (Space)">
                             <Border Width="48" Height="48" CornerRadius="24" 
                                     Background="{StaticResource BrushAccent}">
-                                <TextBlock Text="{Binding IsPlaying, Converter={StaticResource PlayPauseConv}}"
-                                           FontSize="20" HorizontalAlignment="Center" VerticalAlignment="Center"
-                                           Foreground="{StaticResource BrushTextPrimary}"
-                                           Margin="2,0,0,0"/>
+                                <Grid HorizontalAlignment="Center" VerticalAlignment="Center">
+                                    <!-- Play icon -->
+                                    <ContentControl Style="{StaticResource VectorIcon}"
+                                                    Content="{StaticResource IconPlay}"
+                                                    Width="22" Height="22"
+                                                    Visibility="{Binding IsPlaying, Converter={StaticResource BoolToVisInv}}"
+                                                    Margin="2,0,0,0"/>
+                                    <!-- Pause icon -->
+                                    <ContentControl Style="{StaticResource VectorIcon}"
+                                                    Content="{StaticResource IconPause}"
+                                                    Width="22" Height="22"
+                                                    Visibility="{Binding IsPlaying, Converter={StaticResource BoolToVis}}"/>
+                                </Grid>
                             </Border>
                         </Button>
                         <!-- Next -->
                         <Button Style="{StaticResource IconButtonStyle}" Padding="10" Margin="2,0"
                                 Command="{Binding NextCommand}" ToolTip="Video tiếp theo">
-                            <TextBlock Text="⏭" FontSize="20"/>
+                            <ContentControl Style="{StaticResource VectorIcon}"
+                                            Content="{StaticResource IconNext}"
+                                            Width="22" Height="22"/>
                         </Button>
                         <!-- Repeat -->
                         <Button Style="{StaticResource IconButtonStyle}" Padding="8" Margin="2,0"
                                 Command="{Binding ToggleRepeatCommand}" ToolTip="Lặp lại">
-                            <TextBlock Text="🔁" FontSize="16"
-                                       Foreground="{Binding IsRepeat, Converter={StaticResource AccentBrush}}"/>
+                            <ContentControl Style="{StaticResource VectorIcon}"
+                                            Content="{StaticResource IconRepeat}"
+                                            Width="18" Height="18"
+                                            Foreground="{Binding IsRepeat, Converter={StaticResource AccentBrush}}"/>
                         </Button>
                     </StackPanel>
 
@@ -546,7 +638,9 @@
                                 </ContextMenu>
                             </Button.ContextMenu>
                             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                                <TextBlock Text="⚡" FontSize="10" Foreground="{StaticResource BrushAccent}" Margin="0,0,3,0" VerticalAlignment="Center"/>
+                                <ContentControl Style="{StaticResource VectorIconAccent}"
+                                                Content="{StaticResource IconSpeed}"
+                                                Width="12" Height="12" Margin="0,0,4,0"/>
                                 <TextBlock Text="{Binding PlaybackSpeedText}" FontSize="11" FontWeight="SemiBold"
                                            Foreground="{StaticResource BrushTextPrimary}" VerticalAlignment="Center"/>
                             </StackPanel>
@@ -555,7 +649,18 @@
                         <!-- Mute button -->
                         <Button Style="{StaticResource IconButtonStyle}" Padding="8"
                                 Command="{Binding ToggleMuteCommand}" ToolTip="Tắt tiếng (M)">
-                            <TextBlock Text="{Binding IsMuted, Converter={StaticResource MuteIconConv}}" FontSize="18"/>
+                            <Grid>
+                                <!-- Volume high (not muted) -->
+                                <ContentControl Style="{StaticResource VectorIcon}"
+                                                Content="{StaticResource IconVolumeHigh}"
+                                                Width="20" Height="20"
+                                                Visibility="{Binding IsMuted, Converter={StaticResource BoolToVisInv}}"/>
+                                <!-- Volume mute -->
+                                <ContentControl Style="{StaticResource VectorIconSecondary}"
+                                                Content="{StaticResource IconVolumeMute}"
+                                                Width="20" Height="20"
+                                                Visibility="{Binding IsMuted, Converter={StaticResource BoolToVis}}"/>
+                            </Grid>
                         </Button>
 
                         <!-- Volume slider -->
@@ -572,13 +677,26 @@
                         <!-- Stop -->
                         <Button Style="{StaticResource IconButtonStyle}" Padding="8" Margin="4,0,0,0"
                                 Command="{Binding StopCommand}" ToolTip="Dừng">
-                            <TextBlock Text="⏹" FontSize="18"/>
+                            <ContentControl Style="{StaticResource VectorIcon}"
+                                            Content="{StaticResource IconStop}"
+                                            Width="20" Height="20"/>
                         </Button>
 
                         <!-- Fullscreen -->
                         <Button Style="{StaticResource IconButtonStyle}" Padding="8"
                                 Command="{Binding ToggleFullscreenCommand}" ToolTip="Toàn màn hình (F)">
-                            <TextBlock Text="{Binding IsFullscreen, Converter={StaticResource FullscreenConv}}" FontSize="18"/>
+                            <Grid>
+                                <!-- Expand to fullscreen -->
+                                <ContentControl Style="{StaticResource VectorIcon}"
+                                                Content="{StaticResource IconFullscreen}"
+                                                Width="20" Height="20"
+                                                Visibility="{Binding IsFullscreen, Converter={StaticResource BoolToVisInv}}"/>
+                                <!-- Exit fullscreen -->
+                                <ContentControl Style="{StaticResource VectorIcon}"
+                                                Content="{StaticResource IconFullscreenExit}"
+                                                Width="20" Height="20"
+                                                Visibility="{Binding IsFullscreen, Converter={StaticResource BoolToVis}}"/>
+                            </Grid>
                         </Button>
                     </StackPanel>
                 </Grid>
