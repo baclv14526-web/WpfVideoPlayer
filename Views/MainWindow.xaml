@@ -384,7 +384,7 @@
                                 BorderBrush="{StaticResource BrushBorder}" BorderThickness="0,0,0,1">
                             <StackPanel>
                                 <ProgressBar Style="{StaticResource ScanProgressBarStyle}"
-                                             Value="{Binding ScanProgress}" Maximum="100"
+                                             Value="{Binding ScanProgress, Mode=OneWay}" Maximum="100"
                                              Visibility="{Binding IsScanning, Converter={StaticResource BoolToVis}}"
                                              Margin="0,0,0,4"/>
                                 <TextBlock Text="{Binding ScanStatusText}" FontSize="11"

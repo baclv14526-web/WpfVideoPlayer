@@ -63,21 +63,21 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     public MediaPlayer? MediaPlayer => _mediaPlayer;
     public LibVLC? LibVLC => _libVLC;
 
-    public bool IsPlaying { get => _isPlaying; private set => Set(ref _isPlaying, value); }
+    public bool IsPlaying { get => _isPlaying; set => Set(ref _isPlaying, value); }
     public bool IsMuted { get => _isMuted; set { Set(ref _isMuted, value); if (_mediaPlayer != null) _mediaPlayer.Mute = value; } }
-    public bool IsLoading { get => _isLoading; private set => Set(ref _isLoading, value); }
-    public bool HasMedia { get => _hasMedia; private set => Set(ref _hasMedia, value); }
+    public bool IsLoading { get => _isLoading; set => Set(ref _isLoading, value); }
+    public bool HasMedia { get => _hasMedia; set => Set(ref _hasMedia, value); }
     public bool IsFullscreen { get => _isFullscreen; set => Set(ref _isFullscreen, value); }
     public bool IsPlaylistVisible { get => _isPlaylistVisible; set => Set(ref _isPlaylistVisible, value); }
     public bool IsRepeat { get => _isRepeat; set => Set(ref _isRepeat, value); }
     public bool IsShuffle { get => _isShuffle; set => Set(ref _isShuffle, value); }
 
-    public bool IsScanning { get => _isScanning; private set => Set(ref _isScanning, value); }
-    public double ScanProgress { get => _scanProgress; private set => Set(ref _scanProgress, value); }
-    public string ScanStatusText { get => _scanStatusText; private set => Set(ref _scanStatusText, value); }
+    public bool IsScanning { get => _isScanning; set => Set(ref _isScanning, value); }
+    public double ScanProgress { get => _scanProgress; set => Set(ref _scanProgress, value); }
+    public string ScanStatusText { get => _scanStatusText; set => Set(ref _scanStatusText, value); }
     public bool AutoScanOnOpen { get => _autoScanOnOpen; set => Set(ref _autoScanOnOpen, value); }
     public int ActiveSidebarTabIndex { get => _activeSidebarTabIndex; set => Set(ref _activeSidebarTabIndex, value); }
-    public string CurrentFilePath { get => _currentFilePath; private set => Set(ref _currentFilePath, value); }
+    public string CurrentFilePath { get => _currentFilePath; set => Set(ref _currentFilePath, value); }
 
     public double PlaybackSpeed
     {
@@ -118,9 +118,9 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         }
     }
 
-    public double Duration { get => _duration; private set => Set(ref _duration, value); }
-    public string CurrentTimeText { get => _currentTimeText; private set => Set(ref _currentTimeText, value); }
-    public string TotalTimeText { get => _totalTimeText; private set => Set(ref _totalTimeText, value); }
+    public double Duration { get => _duration; set => Set(ref _duration, value); }
+    public string CurrentTimeText { get => _currentTimeText; set => Set(ref _currentTimeText, value); }
+    public string TotalTimeText { get => _totalTimeText; set => Set(ref _totalTimeText, value); }
     public string StatusText { get => _statusText; set => Set(ref _statusText, value); }
     public string CurrentTitle { get => _currentTitle; set => Set(ref _currentTitle, value); }
     public string VideoInfo { get => _videoInfo; set => Set(ref _videoInfo, value); }
