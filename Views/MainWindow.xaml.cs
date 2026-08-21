@@ -90,6 +90,21 @@ public partial class MainWindow : Window
         }
     }
 
+    // ── Speed menu popup ──────────────────────────────────────────────────────
+    private void SpeedButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement fe && fe.ContextMenu != null)
+        {
+            fe.ContextMenu.PlacementTarget = fe;
+            fe.ContextMenu.Placement = System.Windows.Controls.Primitives.PlacementMode.Top;
+            fe.ContextMenu.IsOpen = true;
+        }
+    }
+
     // ── Cleanup ───────────────────────────────────────────────────────────────
-    private void Window_Closed(object sender, EventArgs e) => _vm.Dispose();
+    private void Window_Closed(object sender, EventArgs e)
+    {
+        VideoView.MediaPlayer = null;
+        _vm.Dispose();
+    }
 }

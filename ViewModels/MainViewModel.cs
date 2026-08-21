@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.IO;
 using System.Runtime.CompilerServices;
+using System.Threading;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Threading;
@@ -29,6 +30,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     private bool _isPlaylistVisible = true;
     private bool _isRepeat;
     private bool _isShuffle;
+    private double _playbackSpeed = 1.0;
     private double _volume = 80;
     private double _position;
     private double _duration;
@@ -38,6 +40,8 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     private string _currentTitle = "Chưa có video";
     private string _videoInfo = "";
     private int _selectedPlaylistIndex = -1;
+
+    public static readonly double[] AvailableSpeeds = { 0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0, 2.5, 3.0, 4.0 };
 
     public ObservableCollection<PlaylistItem> Playlist { get; } = new();
 
@@ -53,6 +57,23 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     public bool IsPlaylistVisible { get => _isPlaylistVisible; set => Set(ref _isPlaylistVisible, value); }
     public bool IsRepeat { get => _isRepeat; set => Set(ref _isRepeat, value); }
     public bool IsShuffle { get => _isShuffle; set => Set(ref _isShuffle, value); }
+
+    public double PlaybackSpeed
+    {
+        get => _playbackSpeed;
+        set
+        {
+            if (Set(ref _playbackSpeed, value))
+            {
+                if (_mediaPlayer != null)
+                    _mediaPlayer.SetRate((float)value);
+                OnPropertyChanged(nameof(PlaybackSpeedText));
+                StatusText = $"Tốc độ: {PlaybackSpeedText}";
+            }
+        }
+    }
+
+    public string PlaybackSpeedText => $"{_playbackSpeed:0.##}x";
 
     public double Volume
     {
@@ -106,6 +127,11 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     public ICommand TogglePlaylistCommand { get; }
     public ICommand SeekStartCommand { get; }
     public ICommand SeekEndCommand { get; }
+    public ICommand SeekBackCommand { get; }
+    public ICommand SeekForwardCommand { get; }
+    public ICommand SetSpeedCommand { get; }
+    public ICommand SpeedUpCommand { get; }
+    public ICommand SpeedDownCommand { get; }
     public ICommand RemoveFromPlaylistCommand { get; }
     public ICommand ClearPlaylistCommand { get; }
     public ICommand VolumeUpCommand { get; }
@@ -128,6 +154,11 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         TogglePlaylistCommand   = new RelayCommand(() => IsPlaylistVisible = !IsPlaylistVisible);
         SeekStartCommand     = new RelayCommand(() => _isSliderBeingDragged = true);
         SeekEndCommand       = new RelayCommand(SeekEnd);
+        SeekBackCommand      = new RelayCommand(() => SeekRelative(-5000));
+        SeekForwardCommand   = new RelayCommand(() => SeekRelative(5000));
+        SetSpeedCommand      = new RelayCommand<object>(SetSpeed);
+        SpeedUpCommand       = new RelayCommand(SpeedUp);
+        SpeedDownCommand     = new RelayCommand(SpeedDown);
         RemoveFromPlaylistCommand = new RelayCommand<PlaylistItem>(RemoveFromPlaylist);
         ClearPlaylistCommand = new RelayCommand(ClearPlaylist, () => Playlist.Count > 0);
         VolumeUpCommand      = new RelayCommand(() => Volume = Math.Min(200, Volume + 5));
@@ -152,11 +183,11 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
             _mediaPlayer = new MediaPlayer(_libVLC);
             _mediaPlayer.Volume = (int)_volume;
 
-            _mediaPlayer.Playing  += (_, _) => App.Current.Dispatcher.Invoke(OnPlaying);
-            _mediaPlayer.Paused   += (_, _) => App.Current.Dispatcher.Invoke(OnPaused);
-            _mediaPlayer.Stopped  += (_, _) => App.Current.Dispatcher.Invoke(OnStopped);
-            _mediaPlayer.EndReached += (_, _) => App.Current.Dispatcher.Invoke(OnEndReached);
-            _mediaPlayer.EncounteredError += (_, _) => App.Current.Dispatcher.Invoke(OnError);
+            _mediaPlayer.Playing  += (_, _) => Application.Current?.Dispatcher.InvokeAsync(OnPlaying);
+            _mediaPlayer.Paused   += (_, _) => Application.Current?.Dispatcher.InvokeAsync(OnPaused);
+            _mediaPlayer.Stopped  += (_, _) => Application.Current?.Dispatcher.InvokeAsync(OnStopped);
+            _mediaPlayer.EndReached += (_, _) => ThreadPool.QueueUserWorkItem(_ => HandleEndReached());
+            _mediaPlayer.EncounteredError += (_, _) => Application.Current?.Dispatcher.InvokeAsync(OnError);
 
             OnPropertyChanged(nameof(MediaPlayer));
             OnPropertyChanged(nameof(LibVLC));
@@ -177,8 +208,8 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         StatusText = "Đang tải...";
 
         var media = new Media(_libVLC, path, FromType.FromPath);
-        _mediaPlayer.Play(media);
-        media.Dispose();
+        _mediaPlayer.Media = media;
+        _mediaPlayer.Play();
 
         HasMedia = true;
         CurrentTitle = Path.GetFileNameWithoutExtension(path);
@@ -324,6 +355,8 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         IsLoading = false;
         StatusText = "Đang phát";
         VideoInfo = GetVideoInfo();
+        if (_playbackSpeed != 1.0 && _mediaPlayer != null)
+            _mediaPlayer.SetRate((float)_playbackSpeed);
     }
 
     private void OnPaused()
@@ -339,13 +372,39 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         StatusText = "Đã dừng";
     }
 
-    private void OnEndReached()
+    private void HandleEndReached()
     {
-        IsPlaying = false;
-        _uiTimer.Stop();
-        if (IsRepeat) { PlayFile(Playlist[GetCurrentPlaylistIndex()].FilePath); return; }
-        if (Playlist.Count > 1) PlayNext();
-        else { Stop(); StatusText = "Phát xong"; }
+        // LibVLC triggers EndReached on its own internal worker thread.
+        // Calling Stop() or Play() directly from that callback causes a deadlock.
+        // We must stop the media player on a background thread first.
+        _mediaPlayer?.Stop();
+
+        Application.Current?.Dispatcher.InvokeAsync(() =>
+        {
+            _uiTimer.Stop();
+            Position = 0;
+            CurrentTimeText = "0:00:00";
+
+            if (IsRepeat)
+            {
+                var idx = GetCurrentPlaylistIndex();
+                if (idx >= 0 && idx < Playlist.Count)
+                {
+                    PlayFile(Playlist[idx].FilePath);
+                    return;
+                }
+            }
+
+            if (Playlist.Count > 1)
+            {
+                PlayNext();
+            }
+            else
+            {
+                IsPlaying = false;
+                StatusText = "Phát xong";
+            }
+        });
     }
 
     private void OnError()
@@ -356,6 +415,50 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
+    private void SetSpeed(object? param)
+    {
+        if (param == null) return;
+        if (param is double d)
+        {
+            PlaybackSpeed = d;
+        }
+        else if (double.TryParse(param.ToString(), System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out double s))
+        {
+            PlaybackSpeed = s;
+        }
+    }
+
+    private void SpeedUp()
+    {
+        int idx = Array.IndexOf(AvailableSpeeds, _playbackSpeed);
+        if (idx >= 0 && idx < AvailableSpeeds.Length - 1)
+            PlaybackSpeed = AvailableSpeeds[idx + 1];
+        else if (idx == -1)
+        {
+            var next = AvailableSpeeds.FirstOrDefault(s => s > _playbackSpeed);
+            if (next > 0) PlaybackSpeed = next;
+        }
+    }
+
+    private void SpeedDown()
+    {
+        int idx = Array.IndexOf(AvailableSpeeds, _playbackSpeed);
+        if (idx > 0)
+            PlaybackSpeed = AvailableSpeeds[idx - 1];
+        else if (idx == -1)
+        {
+            var prev = AvailableSpeeds.LastOrDefault(s => s < _playbackSpeed);
+            if (prev > 0) PlaybackSpeed = prev;
+        }
+    }
+
+    private void SeekRelative(long msDelta)
+    {
+        if (_mediaPlayer == null || !HasMedia || _duration <= 0) return;
+        var newTime = Math.Clamp(_mediaPlayer.Time + msDelta, 0, (long)(_duration * 1000));
+        _mediaPlayer.Time = newTime;
+    }
+
     private string GetVideoInfo()
     {
         var tracks = _mediaPlayer?.Media?.Tracks;
@@ -392,8 +495,12 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     public void Dispose()
     {
         _uiTimer.Stop();
-        _mediaPlayer?.Stop();
-        _mediaPlayer?.Dispose();
+        if (_mediaPlayer != null)
+        {
+            if (_mediaPlayer.IsPlaying)
+                _mediaPlayer.Stop();
+            _mediaPlayer.Dispose();
+        }
         _libVLC?.Dispose();
     }
 }

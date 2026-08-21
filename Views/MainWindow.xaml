@@ -29,6 +29,8 @@
         <KeyBinding Key="Down" Command="{Binding VolumeDownCommand}"/>
         <KeyBinding Key="M" Command="{Binding ToggleMuteCommand}"/>
         <KeyBinding Key="F" Command="{Binding ToggleFullscreenCommand}"/>
+        <KeyBinding Key="OemOpenBrackets" Command="{Binding SpeedDownCommand}"/>
+        <KeyBinding Key="OemCloseBrackets" Command="{Binding SpeedUpCommand}"/>
         <KeyBinding Key="Escape" Command="{Binding ExitFullscreenCommand}"/>
         <KeyBinding Key="O" Modifiers="Ctrl" Command="{Binding OpenFileCommand}"/>
     </Window.InputBindings>
@@ -328,8 +330,34 @@
                         <!-- Status text -->
                         <TextBlock Text="{Binding StatusText}" FontSize="11"
                                    Foreground="{StaticResource BrushTextSecondary}"
-                                   VerticalAlignment="Center" Margin="0,0,12,0"
-                                   MaxWidth="160" TextTrimming="CharacterEllipsis"/>
+                                   VerticalAlignment="Center" Margin="0,0,10,0"
+                                   MaxWidth="130" TextTrimming="CharacterEllipsis"/>
+
+                        <!-- Speed selector button -->
+                        <Button Style="{StaticResource SpeedButtonStyle}"
+                                ToolTip="Tốc độ phát (Click để chọn, phím [ / ])"
+                                Click="SpeedButton_Click"
+                                Margin="0,0,6,0">
+                            <Button.ContextMenu>
+                                <ContextMenu>
+                                    <MenuItem Header="0.25x" Command="{Binding SetSpeedCommand}" CommandParameter="0.25"/>
+                                    <MenuItem Header="0.5x"  Command="{Binding SetSpeedCommand}" CommandParameter="0.5"/>
+                                    <MenuItem Header="0.75x" Command="{Binding SetSpeedCommand}" CommandParameter="0.75"/>
+                                    <MenuItem Header="1.0x (Chuẩn)" Command="{Binding SetSpeedCommand}" CommandParameter="1.0" FontWeight="SemiBold"/>
+                                    <MenuItem Header="1.25x" Command="{Binding SetSpeedCommand}" CommandParameter="1.25"/>
+                                    <MenuItem Header="1.5x"  Command="{Binding SetSpeedCommand}" CommandParameter="1.5"/>
+                                    <MenuItem Header="2.0x"  Command="{Binding SetSpeedCommand}" CommandParameter="2.0"/>
+                                    <MenuItem Header="2.5x"  Command="{Binding SetSpeedCommand}" CommandParameter="2.5"/>
+                                    <MenuItem Header="3.0x"  Command="{Binding SetSpeedCommand}" CommandParameter="3.0"/>
+                                    <MenuItem Header="4.0x"  Command="{Binding SetSpeedCommand}" CommandParameter="4.0"/>
+                                </ContextMenu>
+                            </Button.ContextMenu>
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <TextBlock Text="⚡" FontSize="10" Foreground="{StaticResource BrushAccent}" Margin="0,0,3,0" VerticalAlignment="Center"/>
+                                <TextBlock Text="{Binding PlaybackSpeedText}" FontSize="11" FontWeight="SemiBold"
+                                           Foreground="{StaticResource BrushTextPrimary}" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
 
                         <!-- Mute button -->
                         <Button Style="{StaticResource IconButtonStyle}" Padding="8"

@@ -210,9 +210,12 @@ jobs:
           |------|-----------|
           | `Space` | Play / Pause |
           | `F` | Toàn màn hình |
+          | `Escape` | Thoát toàn màn hình |
           | `M` | Tắt/bật âm |
           | `Ctrl+O` | Mở file |
+          | `←` / `→` | Tua lùi / tiến 5 giây |
           | `↑` / `↓` | Âm lượng |
+          | `[` / `]` | Giảm / tăng tốc độ phát |
 
           ---
           *Built from commit ${{ github.sha }}*
