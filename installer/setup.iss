@@ -4,9 +4,11 @@
 ; ============================================================
 
 #define MyAppName      "VPlayer"
-#define MyAppVersion   GetEnv("APP_VERSION")
+#ifndef MyAppVersion
+  #define MyAppVersion   GetEnv("APP_VERSION")
+#endif
 #define MyAppPublisher "VPlayer"
-#define MyAppURL       "https://github.com/{OWNER}/{REPO}"
+#define MyAppURL       "https://github.com"
 #define MyAppExeName   "WpfVideoPlayer.exe"
 #define PublishDir     "..\publish"
 
