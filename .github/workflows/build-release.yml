@@ -8,7 +8,7 @@ on:
   workflow_dispatch:      # manual run from Actions tab (no release created)
     inputs:
       version:
-        description: 'Version override (e.g. 1.2.3). Leave blank to use 0.0.0-dev'
+        description: 'Version override (e.g. 1.2.3 or 1.2.3-beta). Leave blank → 0.0.0'
         required: false
         default: ''
 
@@ -29,21 +29,48 @@ jobs:
       with:
         fetch-depth: 0    # full history so tags are visible
 
-    # ── 2. Resolve version string ─────────────────────────────────────────────
+    # ── 2. Resolve version strings ────────────────────────────────────────────
+    # Three separate outputs because MSBuild has strict requirements:
+    #
+    #   VERSION          Full semver for display/NuGet  e.g. "1.2.3" or "1.2.3-beta"
+    #   FILE_VERSION     4-part numeric only (FileVersion field) e.g. "1.2.3.0"
+    #   ASSEMBLY_VERSION 4-part numeric only (AssemblyVersion)  e.g. "1.2.3.0"
+    #
+    # AssemblyVersion and FileVersion reject pre-release suffixes like "-beta".
+    # MC1005 is thrown by Microsoft.WinFX.targets when a non-numeric version
+    # is passed to AssemblyVersion — this step strips the suffix to prevent it.
     - name: Resolve version
-      id: version
+      id: ver
       shell: pwsh
       run: |
+        # Determine raw version string
         if ("${{ github.event_name }}" -eq "push" -and "${{ github.ref_type }}" -eq "tag") {
-          # Strip leading "v" from tag name: v1.2.3 → 1.2.3
-          $ver = "${{ github.ref_name }}" -replace '^v', ''
+          $raw = "${{ github.ref_name }}" -replace '^v', ''   # v1.2.3 → 1.2.3
         } elseif ("${{ inputs.version }}" -ne "") {
-          $ver = "${{ inputs.version }}"
+          $raw = "${{ inputs.version }}"
         } else {
-          $ver = "0.0.0-dev"
+          $raw = "0.0.0"
         }
-        echo "VERSION=$ver" >> $env:GITHUB_OUTPUT
-        echo "Resolved version: $ver"
+
+        # Strip pre-release suffix: "1.2.3-beta.1" → "1.2.3"
+        $numeric = ($raw -split '-')[0]
+
+        # Ensure at least 3 numeric parts so ".0" suffix makes a valid 4-part version
+        $parts = $numeric -split '\.'
+        while ($parts.Count -lt 3) { $parts += '0' }
+        $threePartNumeric = ($parts[0..2]) -join '.'
+
+        $fileVer     = "$threePartNumeric.0"
+        $assemblyVer = "$threePartNumeric.0"
+
+        # Write outputs
+        "VERSION=$raw"                  | Out-File -Append -Encoding utf8 $env:GITHUB_OUTPUT
+        "FILE_VERSION=$fileVer"         | Out-File -Append -Encoding utf8 $env:GITHUB_OUTPUT
+        "ASSEMBLY_VERSION=$assemblyVer" | Out-File -Append -Encoding utf8 $env:GITHUB_OUTPUT
+
+        Write-Host "VERSION          = $raw"
+        Write-Host "FILE_VERSION     = $fileVer"
+        Write-Host "ASSEMBLY_VERSION = $assemblyVer"
 
     # ── 3. Setup .NET 8 SDK ───────────────────────────────────────────────────
     - name: Setup .NET 8
@@ -63,21 +90,26 @@ jobs:
     - name: Restore NuGet packages
       run: dotnet restore WpfVideoPlayer.csproj -r win-x64
 
-    # ── 6. Build & Publish (self-contained = false, framework-dependent) ──────
-    #   Produces a folder with EXE + all native VLC DLLs.
-    #   Users only need .NET 8 Desktop Runtime (~55 MB) — no full SDK.
+    # ── 6. Build & Publish ────────────────────────────────────────────────────
+    # framework-dependent: users need .NET 8 Desktop Runtime, not the full SDK.
+    # All native VLC DLLs are copied to /publish by the VideoLAN.LibVLC.Windows package.
+    #
+    # Version flags passed separately to avoid the MC1005 error:
+    #   -p:Version           → NuGet/semver-aware  (allows pre-release suffix)
+    #   -p:FileVersion       → must be X.Y.Z.W numeric
+    #   -p:AssemblyVersion   → must be X.Y.Z.W numeric  ← this was the failing one
     - name: Publish (framework-dependent)
+      shell: pwsh
       run: |
         dotnet publish WpfVideoPlayer.csproj `
           -c Release `
           -r win-x64 `
           --self-contained false `
           -p:PublishSingleFile=false `
-          -p:Version=${{ steps.version.outputs.VERSION }} `
-          -p:FileVersion=${{ steps.version.outputs.VERSION }}.0 `
-          -p:AssemblyVersion=${{ steps.version.outputs.VERSION }}.0 `
+          -p:Version="${{ steps.ver.outputs.VERSION }}" `
+          -p:FileVersion="${{ steps.ver.outputs.FILE_VERSION }}" `
+          -p:AssemblyVersion="${{ steps.ver.outputs.ASSEMBLY_VERSION }}" `
           -o publish
-      shell: pwsh
 
     # ── 7. Verify publish output ──────────────────────────────────────────────
     - name: Verify publish output
@@ -91,7 +123,7 @@ jobs:
         Write-Host "Publish contents:"
         Get-ChildItem publish | Format-Table Name, Length -AutoSize
 
-    # ── 8. Install Inno Setup ─────────────────────────────────────────────────
+    # ── 8. Install Inno Setup 6 ───────────────────────────────────────────────
     - name: Install Inno Setup 6
       shell: pwsh
       run: |
@@ -99,21 +131,23 @@ jobs:
         $dest = "$env:TEMP\innosetup.exe"
         Invoke-WebRequest -Uri $url -OutFile $dest -UseBasicParsing
         Start-Process -FilePath $dest -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART" -Wait
-        # Add iscc.exe to PATH for subsequent steps
         $isccDir = "C:\Program Files (x86)\Inno Setup 6"
-        echo "$isccDir" | Out-File -Append -Encoding utf8 $env:GITHUB_PATH
+        if (-not (Test-Path "$isccDir\ISCC.exe")) {
+          Write-Error "ISCC.exe not found after install"
+          exit 1
+        }
         Write-Host "Inno Setup installed at $isccDir"
 
     # ── 9. Compile installer ──────────────────────────────────────────────────
     - name: Compile Inno Setup installer
       shell: pwsh
       env:
-        APP_VERSION: ${{ steps.version.outputs.VERSION }}
+        APP_VERSION: ${{ steps.ver.outputs.VERSION }}
       run: |
         New-Item -ItemType Directory -Force -Path installer_output | Out-Null
         & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" `
-          /DMyAppVersion=$env:APP_VERSION `
-          installer\setup.iss
+            /DMyAppVersion="$env:APP_VERSION" `
+            installer\setup.iss
         if ($LASTEXITCODE -ne 0) {
           Write-Error "Inno Setup compilation failed (exit $LASTEXITCODE)"
           exit 1
@@ -128,15 +162,15 @@ jobs:
       run: |
         $file = Get-ChildItem installer_output\*.exe | Select-Object -First 1
         if (-not $file) { Write-Error "No installer EXE found"; exit 1 }
-        echo "PATH=$($file.FullName)" >> $env:GITHUB_OUTPUT
-        echo "NAME=$($file.Name)"     >> $env:GITHUB_OUTPUT
-        Write-Host "Installer: $($file.FullName) ($([math]::Round($file.Length/1MB,1)) MB)"
+        "PATH=$($file.FullName)" | Out-File -Append -Encoding utf8 $env:GITHUB_OUTPUT
+        "NAME=$($file.Name)"     | Out-File -Append -Encoding utf8 $env:GITHUB_OUTPUT
+        Write-Host "Installer: $($file.FullName)  ($([math]::Round($file.Length/1MB,1)) MB)"
 
-    # ── 11. Upload installer as workflow artifact (always available) ──────────
+    # ── 11. Upload installer as workflow artifact (always, 30-day retention) ──
     - name: Upload installer artifact
       uses: actions/upload-artifact@v4
       with:
-        name: VPlayer-Installer-${{ steps.version.outputs.VERSION }}
+        name: VPlayer-Installer-${{ steps.ver.outputs.VERSION }}
         path: ${{ steps.installer.outputs.PATH }}
         retention-days: 30
 
@@ -148,7 +182,7 @@ jobs:
         tag_name: ${{ github.ref_name }}
         name: VPlayer ${{ github.ref_name }}
         draft: false
-        prerelease: ${{ contains(github.ref_name, '-') }}  # v1.0.0-beta → prerelease
+        prerelease: ${{ contains(github.ref_name, '-') }}
         body: |
           ## VPlayer ${{ github.ref_name }}
 
@@ -158,7 +192,7 @@ jobs:
           **Yêu cầu:** Windows 10/11 (x64) + [.NET 8 Desktop Runtime](https://dotnet.microsoft.com/en-us/download/dotnet/8.0)
 
           ### 🎬 Định dạng hỗ trợ
-          MP4, MKV, AVI, MOV, WMV, FLV, WebM, M4V, TS, VOB, OGV, 3GP, RMVB, HEVC/H.265 và nhiều hơn nữa (LibVLC engine)
+          MP4, MKV, AVI, MOV, WMV, FLV, WebM, M4V, TS, VOB, OGV, 3GP, RMVB, HEVC/H.265 và nhiều hơn nữa
 
           ### ⌨️ Phím tắt
           | Phím | Chức năng |
