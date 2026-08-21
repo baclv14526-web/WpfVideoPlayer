@@ -18,6 +18,7 @@
     <Company>VPlayer</Company>
     <Product>VPlayer</Product>
     <Description>WPF Video Player powered by LibVLC</Description>
+    <ApplicationIcon>Assets\app.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>
@@ -28,6 +29,10 @@
     <PackageReference Include="OpenCvSharp4" Version="4.10.0.20240616" />
     <PackageReference Include="OpenCvSharp4.runtime.win" Version="4.10.0.20240616" />
     <PackageReference Include="OpenCvSharp4.WpfExtensions" Version="4.10.0.20240616" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Resource Include="Assets\app.ico"/>
   </ItemGroup>
 
 </Project>
