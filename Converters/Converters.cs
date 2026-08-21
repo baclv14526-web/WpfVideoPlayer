@@ -102,3 +102,16 @@ public class StringToSolidBrushConverter : IValueConverter
     }
     public object ConvertBack(object v, Type t, object p, CultureInfo c) => Binding.DoNothing;
 }
+
+public class EqualityToBrushConverter : IValueConverter
+{
+    public Brush ActiveBrush { get; set; } = new SolidColorBrush(Color.FromRgb(0x6C, 0x63, 0xFF));
+    public Brush InactiveBrush { get; set; } = new SolidColorBrush(Color.FromRgb(0x88, 0x88, 0xA0));
+
+    public object Convert(object v, Type t, object p, CultureInfo c)
+    {
+        if (v == null || p == null) return InactiveBrush;
+        return v.ToString() == p.ToString() ? ActiveBrush : InactiveBrush;
+    }
+    public object ConvertBack(object v, Type t, object p, CultureInfo c) => Binding.DoNothing;
+}

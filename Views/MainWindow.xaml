@@ -21,6 +21,7 @@
         <conv:BoolToPlaylistWidthConverter x:Key="PlaylistWidthConv"/>
         <conv:NormalizedToLeftConverter x:Key="NormToLeftConv"/>
         <conv:EqualityToVisibilityConverter x:Key="EqToVis"/>
+        <conv:EqualityToBrushConverter x:Key="EqToBrush"/>
         <conv:StringToSolidBrushConverter x:Key="StrToBrush"/>
     </Window.Resources>
 
@@ -202,9 +203,9 @@
                                     <ContentControl Style="{StaticResource VectorIcon}"
                                                     Content="{StaticResource IconPlaylist}"
                                                     Width="14" Height="14" Margin="0,0,5,0"
-                                                    Foreground="{Binding ActiveSidebarTabIndex, Converter={StaticResource EqToVis}, ConverterParameter=0, TargetNullValue={StaticResource BrushTextSecondary}}"/>
+                                                    Foreground="{Binding ActiveSidebarTabIndex, Converter={StaticResource EqToBrush}, ConverterParameter=0, Mode=OneWay}"/>
                                     <TextBlock Text="Playlist" FontSize="12" FontWeight="SemiBold"
-                                               Foreground="{Binding ActiveSidebarTabIndex, Converter={StaticResource EqToVis}, ConverterParameter=0, TargetNullValue={StaticResource BrushTextSecondary}}"/>
+                                               Foreground="{Binding ActiveSidebarTabIndex, Converter={StaticResource EqToBrush}, ConverterParameter=0, Mode=OneWay}"/>
                                     <Border Background="{StaticResource BrushAccent}" CornerRadius="8" 
                                             Padding="5,1" Margin="6,0,0,0" VerticalAlignment="Center">
                                         <TextBlock Text="{Binding Playlist.Count}" FontSize="10" FontWeight="Bold"
@@ -220,9 +221,9 @@
                                     <ContentControl Style="{StaticResource VectorIcon}"
                                                     Content="{StaticResource IconMotion}"
                                                     Width="14" Height="14" Margin="0,0,5,0"
-                                                    Foreground="{Binding ActiveSidebarTabIndex, Converter={StaticResource EqToVis}, ConverterParameter=1, TargetNullValue={StaticResource BrushTextSecondary}}"/>
+                                                    Foreground="{Binding ActiveSidebarTabIndex, Converter={StaticResource EqToBrush}, ConverterParameter=1, Mode=OneWay}"/>
                                     <TextBlock Text="Chuyển động" FontSize="12" FontWeight="SemiBold"
-                                               Foreground="{Binding ActiveSidebarTabIndex, Converter={StaticResource EqToVis}, ConverterParameter=1, TargetNullValue={StaticResource BrushTextSecondary}}"/>
+                                               Foreground="{Binding ActiveSidebarTabIndex, Converter={StaticResource EqToBrush}, ConverterParameter=1, Mode=OneWay}"/>
                                     <Border Background="#FF4757" CornerRadius="8" 
                                             Padding="5,1" Margin="6,0,0,0" VerticalAlignment="Center">
                                         <TextBlock Text="{Binding Bookmarks.Count}" FontSize="10" FontWeight="Bold"
@@ -489,9 +490,9 @@
                                 <Style TargetType="ContentPresenter">
                                     <Setter Property="Canvas.Left">
                                         <Setter.Value>
-                                            <MultiBinding Converter="{StaticResource NormToLeftConv}" ConverterParameter="8">
-                                                <Binding Path="NormalizedPosition"/>
-                                                <Binding Path="ActualWidth" RelativeSource="{RelativeSource AncestorType=Canvas}"/>
+                                            <MultiBinding Converter="{StaticResource NormToLeftConv}" ConverterParameter="8" Mode="OneWay">
+                                                <Binding Path="NormalizedPosition" Mode="OneWay"/>
+                                                <Binding Path="ActualWidth" RelativeSource="{RelativeSource AncestorType=Canvas}" Mode="OneWay"/>
                                             </MultiBinding>
                                         </Setter.Value>
                                     </Setter>
