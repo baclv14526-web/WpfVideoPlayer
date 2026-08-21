@@ -141,10 +141,7 @@ jobs:
     - name: Install Inno Setup 6
       shell: pwsh
       run: |
-        $url  = "https://jrsoftware.org/download.php/is.exe"
-        $dest = "$env:TEMP\innosetup.exe"
-        Invoke-WebRequest -Uri $url -OutFile $dest -UseBasicParsing
-        Start-Process -FilePath $dest -ArgumentList "/VERYSILENT /SUPPRESSMSGBOXES /NORESTART" -Wait
+        choco install innosetup --no-progress
         $isccDir = "C:\Program Files (x86)\Inno Setup 6"
         if (-not (Test-Path "$isccDir\ISCC.exe")) {
           Write-Error "ISCC.exe not found after install"
