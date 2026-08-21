@@ -3,9 +3,14 @@ name: Build & Release
 # ── Triggers ──────────────────────────────────────────────────────────────────
 on:
   push:
+    branches:
+      - main              # push/merge vào main → build (không tạo Release)
     tags:
-      - 'v*.*.*'          # vX.Y.Z  → build + create GitHub Release
-  workflow_dispatch:      # manual run from Actions tab (no release created)
+      - 'v*.*.*'          # vX.Y.Z → build + tạo GitHub Release
+  pull_request:
+    branches:
+      - main              # mở PR vào main → build để kiểm tra
+  workflow_dispatch:      # chạy tay từ Actions tab
     inputs:
       version:
         description: 'Version override (e.g. 1.2.3 or 1.2.3-beta). Leave blank → 0.0.0'
@@ -30,32 +35,37 @@ jobs:
         fetch-depth: 0    # full history so tags are visible
 
     # ── 2. Resolve version strings ────────────────────────────────────────────
-    # Three separate outputs because MSBuild has strict requirements:
+    # Ba trigger cho ra version khác nhau:
+    #   push tag v1.2.3        → VERSION=1.2.3        (→ tạo Release)
+    #   push/PR vào main       → VERSION=0.0.0-dev+<sha7> (build kiểm tra, không Release)
+    #   workflow_dispatch      → VERSION theo input hoặc 0.0.0
     #
-    #   VERSION          Full semver for display/NuGet  e.g. "1.2.3" or "1.2.3-beta"
-    #   FILE_VERSION     4-part numeric only (FileVersion field) e.g. "1.2.3.0"
-    #   ASSEMBLY_VERSION 4-part numeric only (AssemblyVersion)  e.g. "1.2.3.0"
-    #
-    # AssemblyVersion and FileVersion reject pre-release suffixes like "-beta".
-    # MC1005 is thrown by Microsoft.WinFX.targets when a non-numeric version
-    # is passed to AssemblyVersion — this step strips the suffix to prevent it.
+    # AssemblyVersion & FileVersion chỉ nhận X.Y.Z.W số nguyên (không có suffix).
+    # MC1005 xảy ra nếu truyền "0.0.0-dev" vào AssemblyVersion → tách riêng.
     - name: Resolve version
       id: ver
       shell: pwsh
       run: |
-        # Determine raw version string
-        if ("${{ github.event_name }}" -eq "push" -and "${{ github.ref_type }}" -eq "tag") {
-          $raw = "${{ github.ref_name }}" -replace '^v', ''   # v1.2.3 → 1.2.3
+        $event   = "${{ github.event_name }}"
+        $refType = "${{ github.ref_type }}"
+        $sha7    = "${{ github.sha }}".Substring(0, 7)
+
+        if ($event -eq "push" -and $refType -eq "tag") {
+          # Tag push: v1.2.3 → 1.2.3  (hoặc v1.2.3-beta → 1.2.3-beta)
+          $raw = "${{ github.ref_name }}" -replace '^v', ''
+        } elseif ($event -eq "push" -or $event -eq "pull_request") {
+          # Push/PR vào main: đánh dấu rõ là dev build
+          $raw = "0.0.0-dev+$sha7"
         } elseif ("${{ inputs.version }}" -ne "") {
           $raw = "${{ inputs.version }}"
         } else {
           $raw = "0.0.0"
         }
 
-        # Strip pre-release suffix: "1.2.3-beta.1" → "1.2.3"
-        $numeric = ($raw -split '-')[0]
+        # Strip pre-release suffix để lấy phần số thuần: "1.2.3-beta+abc" → "1.2.3"
+        $numeric = ($raw -split '[\-\+]')[0]
 
-        # Ensure at least 3 numeric parts so ".0" suffix makes a valid 4-part version
+        # Đảm bảo đủ 3 phần số
         $parts = $numeric -split '\.'
         while ($parts.Count -lt 3) { $parts += '0' }
         $threePartNumeric = ($parts[0..2]) -join '.'
@@ -63,14 +73,18 @@ jobs:
         $fileVer     = "$threePartNumeric.0"
         $assemblyVer = "$threePartNumeric.0"
 
-        # Write outputs
+        # IS_RELEASE = true chỉ khi push tag (dùng ở step tạo Release)
+        $isRelease = ($event -eq "push" -and $refType -eq "tag").ToString().ToLower()
+
         "VERSION=$raw"                  | Out-File -Append -Encoding utf8 $env:GITHUB_OUTPUT
         "FILE_VERSION=$fileVer"         | Out-File -Append -Encoding utf8 $env:GITHUB_OUTPUT
         "ASSEMBLY_VERSION=$assemblyVer" | Out-File -Append -Encoding utf8 $env:GITHUB_OUTPUT
+        "IS_RELEASE=$isRelease"         | Out-File -Append -Encoding utf8 $env:GITHUB_OUTPUT
 
         Write-Host "VERSION          = $raw"
         Write-Host "FILE_VERSION     = $fileVer"
         Write-Host "ASSEMBLY_VERSION = $assemblyVer"
+        Write-Host "IS_RELEASE       = $isRelease"
 
     # ── 3. Setup .NET 8 SDK ───────────────────────────────────────────────────
     - name: Setup .NET 8
@@ -176,13 +190,13 @@ jobs:
 
     # ── 12. Create GitHub Release (tag pushes only) ───────────────────────────
     - name: Create GitHub Release
-      if: github.event_name == 'push' && github.ref_type == 'tag'
+      if: steps.ver.outputs.IS_RELEASE == 'true'
       uses: softprops/action-gh-release@v2
       with:
         tag_name: ${{ github.ref_name }}
         name: VPlayer ${{ github.ref_name }}
         draft: false
-        prerelease: ${{ contains(github.ref_name, '-') }}
+        prerelease: ${{ contains(steps.ver.outputs.VERSION, '-') }}
         body: |
           ## VPlayer ${{ github.ref_name }}
 
