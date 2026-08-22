@@ -4,9 +4,9 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using OpenCvSharp;
-using OpenCvSharp.WpfExtensions;
 using WpfVideoPlayer.Models;
 
 namespace WpfVideoPlayer.Services;
@@ -305,17 +305,47 @@ public class MotionDetectionService
                 Cv2.PutText(preview, "CHUYEN CANH", new Point(10, 20), HersheyFonts.HersheySimplex, 0.35, new Scalar(211, 111, 112), 1);
             }
 
-            var bitmapSource = preview.ToBitmapSource();
-            if (bitmapSource.CanFreeze)
-            {
-                bitmapSource.Freeze(); // Critical for cross-thread WPF rendering
-            }
-            return bitmapSource;
+            return MatToBitmapSource(preview);
         }
         catch
         {
             return null;
         }
+    }
+
+    private static BitmapSource? MatToBitmapSource(Mat mat)
+    {
+        if (mat.Empty()) return null;
+
+        int width = mat.Width;
+        int height = mat.Height;
+        int stride = (int)mat.Step();
+
+        PixelFormat format = mat.Channels() switch
+        {
+            1 => PixelFormats.Gray8,
+            3 => PixelFormats.Bgr24,
+            4 => PixelFormats.Bgra32,
+            _ => PixelFormats.Bgr24
+        };
+
+        var bs = BitmapSource.Create(
+            width,
+            height,
+            96,
+            96,
+            format,
+            null,
+            mat.Data,
+            stride * height,
+            stride);
+
+        if (bs.CanFreeze)
+        {
+            bs.Freeze();
+        }
+
+        return bs;
     }
 
     private static string FormatTime(long seconds)

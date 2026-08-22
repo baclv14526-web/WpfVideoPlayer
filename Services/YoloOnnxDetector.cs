@@ -238,7 +238,7 @@ public class YoloOnnxDetector : IDisposable
             }
 
             _hogFallback.DetectMultiScale(resized, out Rect[] foundBoxes, out double[] weights,
-                hitThreshold: 0.1, winStride: new Size(8, 8), padding: new Size(16, 16), scale: 1.05);
+                0.1, new Size(8, 8), new Size(16, 16), 1.05);
 
             for (int i = 0; i < foundBoxes.Length; i++)
             {
