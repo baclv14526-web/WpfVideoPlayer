@@ -37,6 +37,13 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     private bool _isRepeat;
     private bool _isShuffle;
     private bool _isLxMode;
+    private bool _isPsMode;
+    // ── Ps mode state ─────────────────────────────────────────────────────────
+    private int  _psPhase = -1;           // -1=off, 0=intro, 1..N=step
+    private long _psIntroStartMs;         // media time (ms) when intro began
+    private long _psPhaseTargetEndMs;     // media time (ms) when current phase ends
+    private int  _psCurrentStep;          // index into _psStepPositions
+    private readonly List<long> _psStepPositions = new();
     private double _playbackSpeed = 1.0;
     private double _volume = 80;
     private double _position;
@@ -82,7 +89,12 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         {
             if (Set(ref _isLxMode, value))
             {
-                if (!value)
+                if (value)
+                {
+                    // Bật Lx → tắt Ps nếu đang chạy
+                    if (_isPsMode) StopPsMode(silent: true);
+                }
+                else
                 {
                     // Khi tắt Lx, reset về 1x
                     _playbackSpeed = 1.0;
@@ -90,6 +102,19 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
                     OnPropertyChanged(nameof(PlaybackSpeedText));
                 }
                 StatusText = value ? "Chế độ Lx: tăng tốc tuyến tính 1x→4x" : "Tốc độ: 1x";
+            }
+        }
+    }
+
+    public bool IsPsMode
+    {
+        get => _isPsMode;
+        set
+        {
+            if (Set(ref _isPsMode, value))
+            {
+                if (value) BeginPsMode();
+                else       StopPsMode();
             }
         }
     }
@@ -178,6 +203,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     public ICommand SpeedUpCommand { get; }
     public ICommand SpeedDownCommand { get; }
     public ICommand ToggleLxModeCommand { get; }
+    public ICommand TogglePsModeCommand { get; }
     public ICommand ScanMotionCommand { get; }
     public ICommand CancelScanCommand { get; }
     public ICommand JumpToBookmarkCommand { get; }
@@ -213,6 +239,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         SpeedUpCommand       = new RelayCommand(SpeedUp);
         SpeedDownCommand     = new RelayCommand(SpeedDown);
         ToggleLxModeCommand  = new RelayCommand(() => IsLxMode = !IsLxMode);
+        TogglePsModeCommand  = new RelayCommand(() => IsPsMode = !IsPsMode, () => HasMedia);
         ScanMotionCommand    = new RelayCommand(() => _ = StartMotionScan(), () => HasMedia && !IsScanning);
         CancelScanCommand    = new RelayCommand(CancelMotionScan, () => IsScanning);
         JumpToBookmarkCommand = new RelayCommand<MotionBookmark>(JumpToBookmark);
@@ -333,6 +360,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     private void Stop()
     {
         if (_isLxMode) IsLxMode = false;
+        if (_isPsMode) StopPsMode(silent: true);
         _mediaPlayer?.Stop();
         _uiTimer.Stop();
         Position = 0;
@@ -455,6 +483,29 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
                 _playbackSpeed = lxSpeed;
                 OnPropertyChanged(nameof(PlaybackSpeedText));
             }
+
+            // ── Ps mode: Play Step state machine ─────────────────────────────
+            if (_isPsMode && _mediaPlayer.IsPlaying)
+            {
+                if (_psPhase == 0) // intro 30s
+                {
+                    if (currentMs >= _psPhaseTargetEndMs)
+                    {
+                        // Intro done → generate random steps & jump to first
+                        GeneratePsSteps();
+                        _psCurrentStep = 0;
+                        AdvancePsStep();
+                    }
+                }
+                else if (_psPhase > 0) // a step
+                {
+                    if (currentMs >= _psPhaseTargetEndMs)
+                    {
+                        _psCurrentStep++;
+                        AdvancePsStep();
+                    }
+                }
+            }
         }
     }
 
@@ -504,6 +555,9 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
                 OnPropertyChanged(nameof(PlaybackSpeedText));
             }
 
+            // Tắt Ps mode khi video kết thúc
+            if (_isPsMode) StopPsMode(silent: true);
+
             if (IsRepeat)
             {
                 var idx = GetCurrentPlaylistIndex();
@@ -537,8 +591,9 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     private void SetSpeed(object? param)
     {
         if (param == null) return;
-        // Chọn tốc độ thủ công → tắt Lx mode
+        // Chọn tốc độ thủ công → tắt Lx/Ps mode
         if (_isLxMode) { _isLxMode = false; OnPropertyChanged(nameof(IsLxMode)); }
+        if (_isPsMode) StopPsMode(silent: true);
         if (param is double d)
         {
             PlaybackSpeed = d;
@@ -606,6 +661,103 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         return ts.TotalHours >= 1
             ? $"{(int)ts.TotalHours}:{ts.Minutes:D2}:{ts.Seconds:D2}"
             : $"{ts.Minutes}:{ts.Seconds:D2}";
+    }
+
+    // ── Ps (Play Step) Mode ───────────────────────────────────────────────────
+    private void BeginPsMode()
+    {
+        if (_mediaPlayer == null || _duration <= 0) { _isPsMode = false; OnPropertyChanged(nameof(IsPsMode)); return; }
+        // Tắt Lx nếu đang bật
+        if (_isLxMode) { _isLxMode = false; OnPropertyChanged(nameof(IsLxMode)); }
+
+        _psPhase          = 0;
+        _psIntroStartMs   = _mediaPlayer.Time;
+        _psPhaseTargetEndMs = _psIntroStartMs + 30_000L;
+        _psCurrentStep    = 0;
+        _psStepPositions.Clear();
+
+        _mediaPlayer.SetRate(2.0f);
+        _playbackSpeed = 2.0;
+        OnPropertyChanged(nameof(PlaybackSpeedText));
+        StatusText = "Ps: Intro 30s @2x...";
+    }
+
+    /// <summary>Tắt Ps mode, reset tốc độ về 1x.</summary>
+    /// <param name="silent">Không dùng — giữ để tương thích các call site nội bộ.</param>
+    private void StopPsMode(bool silent = false)
+    {
+        _psPhase = -1;
+        _psStepPositions.Clear();
+        _isPsMode = false;
+        OnPropertyChanged(nameof(IsPsMode));
+        _mediaPlayer?.SetRate(1.0f);
+        _playbackSpeed = 1.0;
+        OnPropertyChanged(nameof(PlaybackSpeedText));
+        StatusText = "Ps: Kết thúc";
+    }
+
+    private void GeneratePsSteps()
+    {
+        _psStepPositions.Clear();
+        if (_duration <= 0) return;
+
+        var  rnd        = new Random();
+        int  count      = rnd.Next(3, 6);      // 3 đến 5 điểm
+        long durMs      = (long)(_duration * 1000);
+        const long kGap = 30_000L;             // khoảng cách tối thiểu 30s
+
+        // Vùng hợp lệ: sau intro và đủ 30s để phát tại điểm cuối
+        long rangeStart = _psIntroStartMs + kGap;
+        long rangeEnd   = durMs - kGap;        // cần ít nhất 30s phát tại mỗi điểm
+
+        if (rangeEnd <= rangeStart)
+        {
+            StopPsMode();
+            return;
+        }
+
+        // Giảm count nếu không đủ khoảng cách
+        while (count > 1 && (rangeEnd - rangeStart) < (long)(count - 1) * kGap)
+            count--;
+        count = Math.Max(1, count);
+
+        // Sinh tuần tự: mỗi điểm = điểm trước + kGap + random extra
+        long available = rangeEnd - rangeStart - (long)(count - 1) * kGap;
+        long cur = rangeStart + (available > 0 ? (long)(rnd.NextDouble() * available) : 0);
+        _psStepPositions.Add(cur);
+
+        for (int i = 1; i < count; i++)
+        {
+            long remaining = count - 1 - i;
+            long minNext   = cur + kGap;
+            long maxNext   = rangeEnd - remaining * kGap;
+            if (maxNext <= minNext) maxNext = minNext;
+            long extra = maxNext > minNext ? (long)(rnd.NextDouble() * (maxNext - minNext)) : 0;
+            cur = minNext + extra;
+            _psStepPositions.Add(cur);
+        }
+    }
+
+    private void AdvancePsStep()
+    {
+        if (_psCurrentStep >= _psStepPositions.Count)
+        {
+            // Hết tất cả bước → kết thúc Ps
+            StopPsMode();
+            return;
+        }
+
+        long pos = _psStepPositions[_psCurrentStep];
+        if (_mediaPlayer != null)
+        {
+            _mediaPlayer.Time = pos;
+            _psPhaseTargetEndMs = pos + 30_000L;
+            _psPhase = _psCurrentStep + 1;
+            _mediaPlayer.SetRate(2.0f);
+            _playbackSpeed = 2.0;
+            OnPropertyChanged(nameof(PlaybackSpeedText));
+            StatusText = $"Ps: Bước {_psPhase}/{_psStepPositions.Count} @2x ({FormatTime(pos / 1000)})";
+        }
     }
 
     // ── Motion Detection ──────────────────────────────────────────────────────

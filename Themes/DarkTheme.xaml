@@ -337,6 +337,17 @@
         </Style.Triggers>
     </Style>
 
+    <!-- Ps Button Style (toggle, amber/orange when active) -->
+    <Style x:Key="PsButtonStyle" TargetType="Button" BasedOn="{StaticResource SpeedButtonStyle}">
+        <Style.Triggers>
+            <DataTrigger Binding="{Binding IsPsMode}" Value="True">
+                <Setter Property="Background"  Value="#E07B00"/>
+                <Setter Property="BorderBrush" Value="#E07B00"/>
+                <Setter Property="Foreground"  Value="White"/>
+            </DataTrigger>
+        </Style.Triggers>
+    </Style>
+
 
     <Style x:Key="ScanProgressBarStyle" TargetType="ProgressBar">
         <Setter Property="Height" Value="4"/>

@@ -714,6 +714,14 @@
                             <TextBlock Text="Lx" FontSize="11" FontWeight="Bold" VerticalAlignment="Center"/>
                         </Button>
 
+                        <!-- Ps mode toggle button -->
+                        <Button Style="{StaticResource PsButtonStyle}"
+                                Command="{Binding TogglePsModeCommand}"
+                                ToolTip="Chế độ Ps: Play Step – 30s @2x, sau đó nhảy ngẫu nhiên 3-5 điểm (cách nhau ≥30s), mỗi điểm phát 30s @2x"
+                                Margin="0,0,4,0" Padding="8,4">
+                            <TextBlock Text="Ps" FontSize="11" FontWeight="Bold" VerticalAlignment="Center"/>
+                        </Button>
+
                         <!-- Speed selector button -->
                         <Button Style="{StaticResource SpeedButtonStyle}"
                                 ToolTip="Tốc độ phát (Click để chọn, phím [ / ])"
