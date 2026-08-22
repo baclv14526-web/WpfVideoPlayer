@@ -55,7 +55,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     private bool _autoScanOnOpen = true;
     private int _activeSidebarTabIndex = 0; // 0 = Playlist, 1 = Motion Bookmarks
 
-    public static readonly double[] AvailableSpeeds = { 0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0, 2.5, 3.0, 4.0, 6.0, 8.0, 10.0 };
+    public static readonly double[] AvailableSpeeds = { 0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0, 2.5, 3.0, 4.0, 6.0, 8.0, 10.0, 16.0, 32.0, 64.0 };
 
     public ObservableCollection<PlaylistItem> Playlist { get; } = new();
     public ObservableCollection<MotionBookmark> Bookmarks { get; } = new();

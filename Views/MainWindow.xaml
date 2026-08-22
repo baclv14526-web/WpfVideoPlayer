@@ -735,6 +735,10 @@
                                     <MenuItem Header="6.0x"  Command="{Binding SetSpeedCommand}" CommandParameter="6.0"/>
                                     <MenuItem Header="8.0x"  Command="{Binding SetSpeedCommand}" CommandParameter="8.0"/>
                                     <MenuItem Header="10.0x" Command="{Binding SetSpeedCommand}" CommandParameter="10.0"/>
+                                    <Separator/>
+                                    <MenuItem Header="16x ⚡" Command="{Binding SetSpeedCommand}" CommandParameter="16.0"/>
+                                    <MenuItem Header="32x ⚡" Command="{Binding SetSpeedCommand}" CommandParameter="32.0"/>
+                                    <MenuItem Header="64x ⚡" Command="{Binding SetSpeedCommand}" CommandParameter="64.0"/>
                                 </ContextMenu>
                             </Button.ContextMenu>
                             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
