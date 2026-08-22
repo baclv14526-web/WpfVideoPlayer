@@ -355,6 +355,17 @@
                                         </StackPanel>
                                     </Button>
 
+                                    <!-- Random 10 bookmarks button (Fast, non-YOLO) -->
+                                    <Button Style="{StaticResource SpeedButtonStyle}" Margin="6,0,0,0" Padding="8,5" FontSize="11"
+                                            Command="{Binding GenerateRandomBookmarksCommand}"
+                                            Visibility="{Binding IsScanning, Converter={StaticResource BoolToVisInv}}"
+                                            ToolTip="Tạo nhanh 10 mốc ngẫu nhiên trên timeline kèm ảnh preview (không dùng AI)">
+                                        <StackPanel Orientation="Horizontal">
+                                            <TextBlock Text="🎲" FontSize="11" Margin="0,0,4,0" VerticalAlignment="Center"/>
+                                            <TextBlock Text="10 Mốc ngẫu nhiên" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                        </StackPanel>
+                                    </Button>
+
                                     <!-- Cancel button -->
                                     <Button Style="{StaticResource PrimaryButtonStyle}" Background="#CC3333" Padding="10,5" FontSize="11"
                                             Command="{Binding CancelScanCommand}"

@@ -450,6 +450,107 @@ public class MotionDetectionService
         }
     }
 
+    /// <summary>
+    /// Rapidly creates N random bookmarks across the video timeline with preview thumbnails (without using YOLO AI).
+    /// </summary>
+    public async Task<List<MotionBookmark>> GenerateRandomBookmarksAsync(
+        string videoPath,
+        int count = 10,
+        CancellationToken cancellationToken = default)
+    {
+        return await Task.Run(() =>
+        {
+            var bookmarks = new List<MotionBookmark>();
+            if (string.IsNullOrEmpty(videoPath) || !File.Exists(videoPath))
+                return bookmarks;
+
+            using var capture = OpenVideoCapture(videoPath);
+            if (capture == null || !capture.IsOpened())
+                return bookmarks;
+
+            int totalFrames = (int)capture.Get(VideoCaptureProperties.FrameCount);
+            double fps = capture.Get(VideoCaptureProperties.Fps);
+            if (fps <= 0 || double.IsNaN(fps)) fps = 30.0;
+
+            double durationSeconds = totalFrames > 0 ? totalFrames / fps : 0;
+            if (durationSeconds <= 0)
+            {
+                double msec = capture.Get(VideoCaptureProperties.PosMsec);
+                if (msec > 0) durationSeconds = msec / 1000.0;
+            }
+
+            if (totalFrames <= 0) totalFrames = (int)(durationSeconds * fps);
+            if (totalFrames <= 0) totalFrames = 3000;
+            if (durationSeconds <= 0) durationSeconds = totalFrames / fps;
+
+            var random = new Random();
+            var targetFrames = new List<int>();
+
+            int startFrame = (int)(totalFrames * 0.05);
+            int endFrame = (int)(totalFrames * 0.95);
+            if (endFrame <= startFrame)
+            {
+                startFrame = 0;
+                endFrame = Math.Max(1, totalFrames);
+            }
+
+            double segmentSize = (double)(endFrame - startFrame) / count;
+            for (int i = 0; i < count; i++)
+            {
+                int segStart = startFrame + (int)(i * segmentSize);
+                int segEnd = startFrame + (int)((i + 1) * segmentSize);
+                int randFrame = random.Next(segStart, Math.Max(segStart + 1, segEnd));
+                targetFrames.Add(randFrame);
+            }
+
+            targetFrames.Sort();
+
+            using var frame = new Mat();
+            using var preview = new Mat();
+            int thumbW = 280;
+            int thumbH = 158;
+
+            int bookmarkIndex = 1;
+            foreach (int f in targetFrames)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                capture.Set(VideoCaptureProperties.PosFrames, f);
+                if (!capture.Read(frame) || frame.Empty())
+                    continue;
+
+                double timeSec = f / fps;
+                double normPos = durationSeconds > 0 ? Math.Clamp(timeSec / durationSeconds, 0.0, 1.0) : 0;
+
+                Cv2.Resize(frame, preview, new Size(thumbW, thumbH));
+
+                // Draw decorative badge
+                Cv2.Rectangle(preview, new Rect(6, 6, 96, 20), new Scalar(0, 0, 0), -1);
+                Cv2.PutText(preview, $"NGAU NHIEN #{bookmarkIndex}", new Point(10, 20),
+                    HersheyFonts.HersheySimplex, 0.35, new Scalar(246, 130, 59), 1); // Blue BGR
+
+                var previewBmp = MatToBitmapSource(preview);
+
+                bookmarks.Add(new MotionBookmark
+                {
+                    TimeSeconds = timeSec,
+                    TimeText = FormatTime((long)timeSec),
+                    NormalizedPosition = normPos,
+                    Intensity = MotionIntensity.RandomSnapshot,
+                    IntensityRatio = 0.5,
+                    DurationSeconds = 3.0,
+                    PersonCount = 0,
+                    CustomTitle = $"Mốc ngẫu nhiên #{bookmarkIndex}",
+                    PreviewImage = previewBmp
+                });
+
+                bookmarkIndex++;
+            }
+
+            return bookmarks;
+        }, cancellationToken);
+    }
+
     private static BitmapSource? MatToBitmapSource(Mat mat)
     {
         if (mat.Empty()) return null;

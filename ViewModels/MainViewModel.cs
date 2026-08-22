@@ -226,6 +226,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     public ICommand TogglePsModeCommand { get; }
     public ICommand TogglePbModeCommand { get; }
     public ICommand ScanMotionCommand { get; }
+    public ICommand GenerateRandomBookmarksCommand { get; }
     public ICommand CancelScanCommand { get; }
     public ICommand JumpToBookmarkCommand { get; }
     public ICommand ClearBookmarksCommand { get; }
@@ -263,6 +264,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         TogglePsModeCommand  = new RelayCommand(() => IsPsMode = !IsPsMode, () => HasMedia);
         TogglePbModeCommand  = new RelayCommand(() => IsPbMode = !IsPbMode, () => HasMedia);
         ScanMotionCommand    = new RelayCommand(() => _ = StartMotionScan(), () => HasMedia && !IsScanning);
+        GenerateRandomBookmarksCommand = new RelayCommand(() => _ = GenerateRandomBookmarksAsync(), () => HasMedia && !IsScanning);
         CancelScanCommand    = new RelayCommand(CancelMotionScan, () => IsScanning);
         JumpToBookmarkCommand = new RelayCommand<MotionBookmark>(JumpToBookmark);
         ClearBookmarksCommand = new RelayCommand(ClearBookmarks);
@@ -997,6 +999,70 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
                 _scanningVideoPath = null;
                 IsScanning = false;
             }
+        }
+    }
+
+    public async Task GenerateRandomBookmarksAsync(string? path = null)
+    {
+        string target = path ?? _currentFilePath;
+        if (string.IsNullOrEmpty(target) || !File.Exists(target))
+        {
+            ScanStatusText = "Chưa có video để tạo mốc";
+            return;
+        }
+
+        _scanCts?.Cancel();
+        _scanCts = new CancellationTokenSource();
+        var token = _scanCts.Token;
+
+        IsScanning = true;
+        ScanProgress = 0;
+        string targetName = Path.GetFileName(target);
+        ScanStatusText = $"Đang trích xuất 10 mốc ngẫu nhiên: {targetName}...";
+
+        try
+        {
+            var results = await _motionService.GenerateRandomBookmarksAsync(target, 10, token);
+
+            if (string.Equals(_currentFilePath, target, StringComparison.OrdinalIgnoreCase))
+            {
+                Bookmarks.Clear();
+                foreach (var bm in results)
+                {
+                    Bookmarks.Add(bm);
+                }
+
+                if (Bookmarks.Count > 0)
+                {
+                    _cacheService.SaveBookmarks(target, Bookmarks);
+                    ScanStatusText = $"Đã tạo {Bookmarks.Count} mốc ngẫu nhiên và lưu cache";
+                    StatusText = $"Đã tạo {Bookmarks.Count} mốc ngẫu nhiên";
+                }
+                else
+                {
+                    ScanStatusText = "Không thể trích xuất khung hình từ video";
+                }
+            }
+            else
+            {
+                if (results.Count > 0)
+                {
+                    _cacheService.SaveBookmarks(target, results);
+                    StatusText = $"Đã lưu {results.Count} mốc ngẫu nhiên cho: {targetName}";
+                }
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            ScanStatusText = "Đã dừng";
+        }
+        catch (Exception ex)
+        {
+            ScanStatusText = $"Lỗi: {ex.Message}";
+        }
+        finally
+        {
+            IsScanning = false;
         }
     }
 

@@ -11,7 +11,8 @@ public enum MotionIntensity
     SceneChange,
     PersonAction,
     GroupStruggle,
-    GroupDetected
+    GroupDetected,
+    RandomSnapshot
 }
 
 public class MotionBookmark
@@ -33,24 +34,26 @@ public class MotionBookmark
 
     public string Icon => Intensity switch
     {
-        MotionIntensity.GroupStruggle => "🤼",
-        MotionIntensity.PersonAction  => "🏃‍♂️",
-        MotionIntensity.GroupDetected => "👥",
-        MotionIntensity.SceneChange   => "🎬",
-        MotionIntensity.High          => "⚡",
-        MotionIntensity.Medium        => "🚶",
-        _                             => "👤"
+        MotionIntensity.RandomSnapshot => "🎲",
+        MotionIntensity.GroupStruggle  => "🤼",
+        MotionIntensity.PersonAction   => "🏃‍♂️",
+        MotionIntensity.GroupDetected  => "👥",
+        MotionIntensity.SceneChange    => "🎬",
+        MotionIntensity.High           => "⚡",
+        MotionIntensity.Medium         => "🚶",
+        _                              => "👤"
     };
 
     public string BadgeColor => Intensity switch
     {
-        MotionIntensity.GroupStruggle => "#FF3838", // Vivid Red
-        MotionIntensity.PersonAction  => "#FF793F", // Action Orange
-        MotionIntensity.GroupDetected => "#FFB142", // Amber / Group
-        MotionIntensity.SceneChange   => "#706FD3", // Cinematic Purple
-        MotionIntensity.High          => "#FF5252", // Bright Red
-        MotionIntensity.Medium        => "#34ACE0", // Cyan Blue
-        _                             => "#33D9B2"  // Mint
+        MotionIntensity.RandomSnapshot => "#3B82F6", // Royal Blue
+        MotionIntensity.GroupStruggle  => "#FF3838", // Vivid Red
+        MotionIntensity.PersonAction   => "#FF793F", // Action Orange
+        MotionIntensity.GroupDetected  => "#FFB142", // Amber / Group
+        MotionIntensity.SceneChange    => "#706FD3", // Cinematic Purple
+        MotionIntensity.High           => "#FF5252", // Bright Red
+        MotionIntensity.Medium         => "#34ACE0", // Cyan Blue
+        _                              => "#33D9B2"  // Mint
     };
 
     public string Title
@@ -62,13 +65,14 @@ public class MotionBookmark
 
             return Intensity switch
             {
-                MotionIntensity.GroupStruggle => $"Nhóm người xô xát/vật lộn ({PersonCount} người)",
-                MotionIntensity.PersonAction  => $"Hành động/Vật lộn mạnh ({PersonCount} người)",
-                MotionIntensity.GroupDetected => $"Nhóm {PersonCount} người xuất hiện",
-                MotionIntensity.SceneChange   => $"Chuyển cảnh / Góc quay mới ({IntensityPercent})",
-                MotionIntensity.High          => $"Chuyển động mạnh ({IntensityPercent})",
-                MotionIntensity.Medium        => $"Chuyển động vừa ({IntensityPercent})",
-                _                             => $"Chuyển động ({IntensityPercent})"
+                MotionIntensity.RandomSnapshot => "Khoảnh khắc ngẫu nhiên",
+                MotionIntensity.GroupStruggle  => $"Nhóm người xô xát/vật lộn ({PersonCount} người)",
+                MotionIntensity.PersonAction   => $"Hành động/Vật lộn mạnh ({PersonCount} người)",
+                MotionIntensity.GroupDetected  => $"Nhóm {PersonCount} người xuất hiện",
+                MotionIntensity.SceneChange    => $"Chuyển cảnh / Góc quay mới ({IntensityPercent})",
+                MotionIntensity.High           => $"Chuyển động mạnh ({IntensityPercent})",
+                MotionIntensity.Medium         => $"Chuyển động vừa ({IntensityPercent})",
+                _                              => $"Chuyển động ({IntensityPercent})"
             };
         }
     }
