@@ -15,11 +15,14 @@ public class MotionDetectionService
 {
     private const int AnalysisWidth = 480;
     private const int AnalysisHeight = 270;
-    private const double SampleIntervalSeconds = 0.5; // Analyze 2 frames per second
-    private const double SceneChangeHistThreshold = 0.50; // Correlation < 0.50 indicates scene cut
+    private const double SampleIntervalSeconds = 0.5; // Analyze 2 frames per second for high speed
+    private const double SceneChangeHistThreshold = 0.52; // Histogram correlation < 0.52 indicates scene cut
+    private const double MinBookmarkDistanceSeconds = 6.0; // Minimum time gap between similar bookmarks
+    private const double VisualSimilarityThreshold = 0.72; // Hist correlation >= 0.72 means same visual scene
 
     /// <summary>
-    /// Analyzes a video file to detect person struggles, intense actions, and scene transitions using YOLO + OpenCV.
+    /// Analyzes video using YOLO Small and OpenCV, filtering out duplicate/similar scenes 
+    /// so only distinct scenes and peak action moments are bookmarked.
     /// </summary>
     public async Task<List<MotionBookmark>> ScanVideoAsync(
         string videoPath,
@@ -46,7 +49,7 @@ public class MotionDetectionService
 
             using var yoloDetector = new YoloOnnxDetector();
 
-            var rawEvents = new List<RawDetectionEvent>();
+            var candidateEvents = new List<CandidateDetection>();
 
             using var frame = new Mat();
             using var resized = new Mat();
@@ -70,12 +73,12 @@ public class MotionDetectionService
 
                 double timeSec = currentFrameIndex / fps;
 
-                // Resize for fast analysis
+                // 1. Resize for fast processing
                 Cv2.Resize(frame, resized, new Size(AnalysisWidth, AnalysisHeight));
                 Cv2.CvtColor(resized, gray, ColorConversionCodes.BGR2GRAY);
                 Cv2.GaussianBlur(gray, blurred, new Size(15, 15), 0);
 
-                // 1. Calculate color histogram for Scene Change Detection
+                // 2. Color histogram for Scene Fingerprinting & Scene Cut Detection
                 CalculateHsvHist(resized, currentHist);
                 bool isSceneChange = false;
                 double histCorr = 1.0;
@@ -89,7 +92,7 @@ public class MotionDetectionService
                     }
                 }
 
-                // 2. Calculate Motion / Frame Difference
+                // 3. Motion calculation
                 double motionRatio = 0.0;
                 if (!prevGray.Empty())
                 {
@@ -99,25 +102,23 @@ public class MotionDetectionService
                     motionRatio = (double)nonZero / (AnalysisWidth * AnalysisHeight);
                 }
 
-                // 3. Person detection with YOLO / HOG
+                // 4. Person detection with YOLO Small
                 var detectedPersons = yoloDetector.DetectPersons(resized, confThreshold: 0.30f);
                 int personCount = detectedPersons.Count;
 
-                // Check for group struggle / wrestling or intense person action
                 bool isGroupStruggle = false;
                 bool isPersonAction = false;
                 bool isGroupDetected = false;
 
                 if (personCount >= 2)
                 {
-                    // Check bounding boxes overlap / proximity
+                    // Check if people are in close proximity / grappling
                     bool hasBoxOverlap = false;
                     for (int i = 0; i < detectedPersons.Count; i++)
                     {
                         for (int j = i + 1; j < detectedPersons.Count; j++)
                         {
                             float iou = YoloOnnxDetector.ComputeIoU(detectedPersons[i].BoundingBox, detectedPersons[j].BoundingBox);
-                            // Also check distance between centers
                             var centerA = new Point(detectedPersons[i].BoundingBox.X + detectedPersons[i].BoundingBox.Width / 2,
                                                     detectedPersons[i].BoundingBox.Y + detectedPersons[i].BoundingBox.Height / 2);
                             var centerB = new Point(detectedPersons[j].BoundingBox.X + detectedPersons[j].BoundingBox.Width / 2,
@@ -150,30 +151,56 @@ public class MotionDetectionService
                     }
                 }
 
-                // Determine if this frame is a significant event to bookmark
-                if (isGroupStruggle || isPersonAction || isSceneChange || isGroupDetected || motionRatio >= 0.06)
+                // 5. Filter significant events
+                if (isGroupStruggle || isPersonAction || isSceneChange || isGroupDetected || motionRatio >= 0.08)
                 {
                     var intensity = MotionIntensity.Medium;
-                    if (isGroupStruggle) intensity = MotionIntensity.GroupStruggle;
-                    else if (isPersonAction) intensity = MotionIntensity.PersonAction;
-                    else if (isSceneChange) intensity = MotionIntensity.SceneChange;
-                    else if (isGroupDetected) intensity = MotionIntensity.GroupDetected;
-                    else if (motionRatio >= 0.15) intensity = MotionIntensity.High;
+                    double importanceScore = 0.0;
 
-                    // Generate annotated thumbnail preview
-                    var thumbnail = CreateAnnotatedThumbnail(frame, detectedPersons, isGroupStruggle, isPersonAction, isSceneChange);
+                    if (isGroupStruggle)
+                    {
+                        intensity = MotionIntensity.GroupStruggle;
+                        importanceScore = 100.0 + (motionRatio * 50.0) + (personCount * 10.0);
+                    }
+                    else if (isPersonAction)
+                    {
+                        intensity = MotionIntensity.PersonAction;
+                        importanceScore = 70.0 + (motionRatio * 40.0);
+                    }
+                    else if (isSceneChange)
+                    {
+                        intensity = MotionIntensity.SceneChange;
+                        importanceScore = 60.0 + Math.Max(0, (1.0 - histCorr) * 40.0);
+                    }
+                    else if (isGroupDetected)
+                    {
+                        intensity = MotionIntensity.GroupDetected;
+                        importanceScore = 40.0 + (personCount * 5.0);
+                    }
+                    else if (motionRatio >= 0.15)
+                    {
+                        intensity = MotionIntensity.High;
+                        importanceScore = 30.0 + (motionRatio * 30.0);
+                    }
 
-                    rawEvents.Add(new RawDetectionEvent
+                    // Store candidate event with cloned histogram & thumbnail frame
+                    candidateEvents.Add(new CandidateDetection
                     {
                         TimeSec = timeSec,
                         Intensity = intensity,
+                        ImportanceScore = importanceScore,
                         MotionRatio = motionRatio,
                         PersonCount = personCount,
-                        Thumbnail = thumbnail
+                        Hist = currentHist.Clone(),
+                        RawFrame = frame.Clone(),
+                        DetectedPersons = detectedPersons,
+                        IsGroupStruggle = isGroupStruggle,
+                        IsPersonAction = isPersonAction,
+                        IsSceneChange = isSceneChange
                     });
                 }
 
-                // Save states for next iteration
+                // Save states
                 blurred.CopyTo(prevGray);
                 currentHist.CopyTo(prevHist);
 
@@ -187,54 +214,85 @@ public class MotionDetectionService
 
             progress?.Report(100.0);
 
-            // Group adjacent events within 3.5 seconds
-            if (rawEvents.Count > 0)
+            // ═════════════════════════════════════════════════════════════════════
+            // SMART DEDUPLICATION & DISTINCT SCENE FILTERING
+            // ═════════════════════════════════════════════════════════════════════
+            if (candidateEvents.Count > 0)
             {
-                var groups = new List<List<RawDetectionEvent>>();
-                var currentGroup = new List<RawDetectionEvent> { rawEvents[0] };
+                var distinctClusters = new List<List<CandidateDetection>>();
+                var currentCluster = new List<CandidateDetection> { candidateEvents[0] };
 
-                for (int i = 1; i < rawEvents.Count; i++)
+                for (int i = 1; i < candidateEvents.Count; i++)
                 {
-                    if (rawEvents[i].TimeSec - currentGroup.Last().TimeSec <= 3.5 &&
-                        (rawEvents[i].Intensity == currentGroup.First().Intensity ||
-                         rawEvents[i].Intensity == MotionIntensity.GroupStruggle ||
-                         currentGroup.First().Intensity == MotionIntensity.GroupStruggle))
+                    var prev = currentCluster.Last();
+                    var curr = candidateEvents[i];
+                    double timeGap = curr.TimeSec - prev.TimeSec;
+
+                    // Calculate visual similarity between candidate frames
+                    double visualSimilarity = 0.0;
+                    if (prev.Hist != null && curr.Hist != null && !prev.Hist.Empty() && !curr.Hist.Empty())
                     {
-                        currentGroup.Add(rawEvents[i]);
+                        visualSimilarity = Cv2.CompareHist(prev.Hist, curr.Hist, HistCompMethods.Correl);
+                    }
+
+                    // If within close time proximity (< 6s) OR high visual similarity (< 12s with similar background)
+                    bool isSameScene = (timeGap < MinBookmarkDistanceSeconds) ||
+                                       (timeGap < 12.0 && visualSimilarity >= VisualSimilarityThreshold && !curr.IsSceneChange);
+
+                    if (isSameScene)
+                    {
+                        currentCluster.Add(curr);
                     }
                     else
                     {
-                        groups.Add(currentGroup);
-                        currentGroup = new List<RawDetectionEvent> { rawEvents[i] };
+                        distinctClusters.Add(currentCluster);
+                        currentCluster = new List<CandidateDetection> { curr };
                     }
                 }
-                groups.Add(currentGroup);
+                distinctClusters.Add(currentCluster);
 
-                foreach (var g in groups)
+                // Convert each distinct cluster into 1 single high-quality bookmark
+                foreach (var cluster in distinctClusters)
                 {
-                    var primaryEvent = g.OrderByDescending(x => (int)x.Intensity)
-                                        .ThenByDescending(x => x.MotionRatio)
-                                        .First();
+                    // Select the peak representative frame in this distinct scene
+                    var bestEvent = cluster.OrderByDescending(x => x.ImportanceScore)
+                                           .ThenByDescending(x => x.MotionRatio)
+                                           .First();
 
-                    double startTime = g.First().TimeSec;
-                    double endTime = g.Last().TimeSec;
-                    double maxRatio = g.Max(x => x.MotionRatio);
-                    double duration = Math.Max(1.5, endTime - startTime);
-                    int maxPersons = g.Max(x => x.PersonCount);
+                    double startTime = cluster.First().TimeSec;
+                    double endTime = cluster.Last().TimeSec;
+                    double duration = Math.Max(2.0, endTime - startTime);
+                    double maxRatio = cluster.Max(x => x.MotionRatio);
+                    int maxPersons = cluster.Max(x => x.PersonCount);
 
-                    double normPos = durationSeconds > 0 ? Math.Clamp(startTime / durationSeconds, 0.0, 1.0) : 0;
+                    double normPos = durationSeconds > 0 ? Math.Clamp(bestEvent.TimeSec / durationSeconds, 0.0, 1.0) : 0;
+
+                    // Generate clean annotated thumbnail from the peak frame
+                    var preview = CreateAnnotatedThumbnail(
+                        bestEvent.RawFrame,
+                        bestEvent.DetectedPersons,
+                        bestEvent.IsGroupStruggle,
+                        bestEvent.IsPersonAction,
+                        bestEvent.IsSceneChange);
 
                     results.Add(new MotionBookmark
                     {
-                        TimeSeconds = startTime,
-                        TimeText = FormatTime((long)startTime),
+                        TimeSeconds = bestEvent.TimeSec,
+                        TimeText = FormatTime((long)bestEvent.TimeSec),
                         NormalizedPosition = normPos,
                         IntensityRatio = maxRatio,
-                        Intensity = primaryEvent.Intensity,
+                        Intensity = bestEvent.Intensity,
                         DurationSeconds = duration,
                         PersonCount = maxPersons,
-                        PreviewImage = primaryEvent.Thumbnail
+                        PreviewImage = preview
                     });
+
+                    // Dispose unneeded candidate resources
+                    foreach (var c in cluster)
+                    {
+                        c.Hist?.Dispose();
+                        c.RawFrame?.Dispose();
+                    }
                 }
             }
 
@@ -256,16 +314,17 @@ public class MotionDetectionService
     }
 
     private static BitmapSource? CreateAnnotatedThumbnail(
-        Mat originalFrame,
+        Mat? originalFrame,
         List<DetectedPerson> persons,
         bool isGroupStruggle,
         bool isPersonAction,
         bool isSceneChange)
     {
+        if (originalFrame == null || originalFrame.Empty()) return null;
+
         try
         {
             using var preview = new Mat();
-            // Scale thumbnail to 280x158 (16:9)
             int thumbW = 280;
             int thumbH = 158;
             Cv2.Resize(originalFrame, preview, new Size(thumbW, thumbH));
@@ -287,7 +346,6 @@ public class MotionDetectionService
 
                 Cv2.Rectangle(preview, new Rect(bx, by, bw, bh), boxColor, 2);
 
-                // Small badge
                 string label = isGroupStruggle ? "Vat lon" : "Nguoi";
                 Cv2.PutText(preview, label, new Point(bx, Math.Max(14, by - 4)),
                     HersheyFonts.HersheySimplex, 0.4, boxColor, 1, LineTypes.AntiAlias);
@@ -296,12 +354,12 @@ public class MotionDetectionService
             // Top-left indicator badge
             if (isGroupStruggle)
             {
-                Cv2.Rectangle(preview, new Rect(6, 6, 88, 20), new Scalar(0, 0, 0), -1);
+                Cv2.Rectangle(preview, new Rect(6, 6, 92, 20), new Scalar(0, 0, 0), -1);
                 Cv2.PutText(preview, "XO XAT/VAT LON", new Point(10, 20), HersheyFonts.HersheySimplex, 0.35, new Scalar(56, 56, 255), 1);
             }
             else if (isSceneChange)
             {
-                Cv2.Rectangle(preview, new Rect(6, 6, 75, 20), new Scalar(0, 0, 0), -1);
+                Cv2.Rectangle(preview, new Rect(6, 6, 78, 20), new Scalar(0, 0, 0), -1);
                 Cv2.PutText(preview, "CHUYEN CANH", new Point(10, 20), HersheyFonts.HersheySimplex, 0.35, new Scalar(211, 111, 112), 1);
             }
 
@@ -356,12 +414,18 @@ public class MotionDetectionService
             : $"{ts.Minutes:D2}:{ts.Seconds:D2}";
     }
 
-    private record RawDetectionEvent
+    private class CandidateDetection
     {
         public double TimeSec { get; init; }
         public MotionIntensity Intensity { get; init; }
+        public double ImportanceScore { get; init; }
         public double MotionRatio { get; init; }
         public int PersonCount { get; init; }
-        public BitmapSource? Thumbnail { get; init; }
+        public Mat? Hist { get; init; }
+        public Mat? RawFrame { get; init; }
+        public List<DetectedPerson> DetectedPersons { get; init; } = new();
+        public bool IsGroupStruggle { get; init; }
+        public bool IsPersonAction { get; init; }
+        public bool IsSceneChange { get; init; }
     }
 }
