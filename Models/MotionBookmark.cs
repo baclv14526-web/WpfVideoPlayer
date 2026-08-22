@@ -1,4 +1,5 @@
 using System;
+using System.Windows.Media.Imaging;
 
 namespace WpfVideoPlayer.Models;
 
@@ -7,7 +8,10 @@ public enum MotionIntensity
     Light,
     Medium,
     High,
-    SceneChange
+    SceneChange,
+    PersonAction,
+    GroupStruggle,
+    GroupDetected
 }
 
 public class MotionBookmark
@@ -19,33 +23,55 @@ public class MotionBookmark
     public string IntensityPercent => $"{IntensityRatio * 100:0.#}%";
     public MotionIntensity Intensity { get; set; } = MotionIntensity.Medium;
     public double DurationSeconds { get; set; } = 2.0;
+    public int PersonCount { get; set; } = 0;
+    public string CustomTitle { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Frame thumbnail preview image for the bookmark (Frozen BitmapSource for safe WPF binding across threads).
+    /// </summary>
+    public BitmapSource? PreviewImage { get; set; }
 
     public string Icon => Intensity switch
     {
-        MotionIntensity.Light => "🚶",
-        MotionIntensity.Medium => "🏃",
-        MotionIntensity.High => "🏃‍♂️",
-        MotionIntensity.SceneChange => "⚡",
-        _ => "🎬"
+        MotionIntensity.GroupStruggle => "🤼",
+        MotionIntensity.PersonAction  => "🏃‍♂️",
+        MotionIntensity.GroupDetected => "👥",
+        MotionIntensity.SceneChange   => "🎬",
+        MotionIntensity.High          => "⚡",
+        MotionIntensity.Medium        => "🚶",
+        _                             => "👤"
     };
 
     public string BadgeColor => Intensity switch
     {
-        MotionIntensity.Light => "#2ED573",      // Green
-        MotionIntensity.Medium => "#FFA502",     // Orange
-        MotionIntensity.High => "#FF4757",       // Red/Coral
-        MotionIntensity.SceneChange => "#6C63FF", // Purple Accent
-        _ => "#70A1FF"
+        MotionIntensity.GroupStruggle => "#FF3838", // Vivid Red
+        MotionIntensity.PersonAction  => "#FF793F", // Action Orange
+        MotionIntensity.GroupDetected => "#FFB142", // Amber / Group
+        MotionIntensity.SceneChange   => "#706FD3", // Cinematic Purple
+        MotionIntensity.High          => "#FF5252", // Bright Red
+        MotionIntensity.Medium        => "#34ACE0", // Cyan Blue
+        _                             => "#33D9B2"  // Mint
     };
 
-    public string Title => Intensity switch
+    public string Title
     {
-        MotionIntensity.Light => $"Chuyển động nhẹ ({IntensityPercent})",
-        MotionIntensity.Medium => $"Chuyển động vừa ({IntensityPercent})",
-        MotionIntensity.High => $"Chuyển động mạnh ({IntensityPercent})",
-        MotionIntensity.SceneChange => $"Đổi cảnh / Biến đổi lớn ({IntensityPercent})",
-        _ => $"Chuyển động ({IntensityPercent})"
-    };
+        get
+        {
+            if (!string.IsNullOrEmpty(CustomTitle))
+                return CustomTitle;
+
+            return Intensity switch
+            {
+                MotionIntensity.GroupStruggle => $"Nhóm người xô xát/vật lộn ({PersonCount} người)",
+                MotionIntensity.PersonAction  => $"Hành động/Vật lộn mạnh ({PersonCount} người)",
+                MotionIntensity.GroupDetected => $"Nhóm {PersonCount} người xuất hiện",
+                MotionIntensity.SceneChange   => $"Chuyển cảnh / Góc quay mới ({IntensityPercent})",
+                MotionIntensity.High          => $"Chuyển động mạnh ({IntensityPercent})",
+                MotionIntensity.Medium        => $"Chuyển động vừa ({IntensityPercent})",
+                _                             => $"Chuyển động ({IntensityPercent})"
+            };
+        }
+    }
 
     public string Description => $"{Icon} {Title} tại {TimeText}";
 }

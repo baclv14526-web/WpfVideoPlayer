@@ -593,7 +593,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
 
         IsScanning = true;
         ScanProgress = 0;
-        ScanStatusText = "Đang phân tích khung hình chuyển động...";
+        ScanStatusText = "Đang phân tích AI (YOLO / Vật lộn / Chuyển cảnh)...";
         Bookmarks.Clear();
 
         try
@@ -601,7 +601,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
             var progress = new Progress<double>(p =>
             {
                 ScanProgress = p;
-                ScanStatusText = $"Đang quét chuyển động: {p:0.#}%";
+                ScanStatusText = $"Đang quét AI (YOLO & Cắt cảnh): {p:0.#}%";
             });
 
             var results = await _motionService.ScanVideoAsync(target, progress, token);
@@ -613,13 +613,13 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
             }
 
             ScanStatusText = Bookmarks.Count > 0
-                ? $"Đã phát hiện {Bookmarks.Count} mốc chuyển động"
-                : "Không phát hiện chuyển động đáng kể";
-            StatusText = $"Phát hiện {Bookmarks.Count} cảnh chuyển động";
+                ? $"Đã phát hiện {Bookmarks.Count} cảnh (người, vật lộn, chuyển cảnh)"
+                : "Không phát hiện sự kiện đáng kể";
+            StatusText = $"Phát hiện {Bookmarks.Count} mốc sự kiện";
         }
         catch (OperationCanceledException)
         {
-            ScanStatusText = "Đã hủy quét chuyển động";
+            ScanStatusText = "Đã dừng quét";
         }
         catch (Exception ex)
         {

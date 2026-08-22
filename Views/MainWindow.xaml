@@ -411,25 +411,50 @@
                                  VirtualizingPanel.IsVirtualizing="True">
                             <ListBox.ItemTemplate>
                                 <DataTemplate DataType="{x:Type models:MotionBookmark}">
-                                    <Grid Margin="0,2">
+                                    <Grid Margin="0,4">
                                         <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="76"/>
                                             <ColumnDefinition Width="*"/>
                                             <ColumnDefinition Width="Auto"/>
                                         </Grid.ColumnDefinitions>
 
-                                        <!-- Badge icon -->
-                                        <Border Grid.Column="0" Width="30" Height="30" CornerRadius="15"
-                                                Background="{Binding BadgeColor, Converter={StaticResource StrToBrush}}"
-                                                VerticalAlignment="Center" Margin="0,0,10,0">
-                                            <TextBlock Text="{Binding Icon}" FontSize="14" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                        <!-- Image Thumbnail Preview -->
+                                        <Border Grid.Column="0" Width="72" Height="44" CornerRadius="4"
+                                                Background="#1E1E28" BorderBrush="{StaticResource BrushBorder}" BorderThickness="1"
+                                                ClipToBounds="True" Margin="0,0,8,0">
+                                            <Grid>
+                                                <!-- Image if present -->
+                                                <Image Source="{Binding PreviewImage}" Stretch="UniformToFill"/>
+
+                                                <!-- Fallback if no image -->
+                                                <Border Background="{Binding BadgeColor, Converter={StaticResource StrToBrush}}"
+                                                        Opacity="0.25"
+                                                        Visibility="{Binding PreviewImage, Converter={StaticResource BoolToVisInv}}"/>
+                                                <TextBlock Text="{Binding Icon}" FontSize="16" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                           Visibility="{Binding PreviewImage, Converter={StaticResource BoolToVisInv}}"/>
+
+                                                <!-- Mini time badge on bottom right of thumbnail -->
+                                                <Border Background="#CC000000" CornerRadius="2" Padding="3,1"
+                                                        HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="2">
+                                                    <TextBlock Text="{Binding TimeText}" FontSize="9" FontFamily="Consolas"
+                                                               Foreground="#FFFFFF"/>
+                                                </Border>
+                                            </Grid>
                                         </Border>
 
                                         <!-- Info -->
                                         <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                            <TextBlock Text="{Binding Title}" FontSize="12" FontWeight="SemiBold"
-                                                       Foreground="{StaticResource BrushTextPrimary}" TextTrimming="CharacterEllipsis"/>
-                                            <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
+                                            <StackPanel Orientation="Horizontal">
+                                                <Border Width="18" Height="18" CornerRadius="9"
+                                                        Background="{Binding BadgeColor, Converter={StaticResource StrToBrush}}"
+                                                        VerticalAlignment="Center" Margin="0,0,5,0">
+                                                    <TextBlock Text="{Binding Icon}" FontSize="10" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,-1,0,0"/>
+                                                </Border>
+                                                <TextBlock Text="{Binding Title}" FontSize="11" FontWeight="SemiBold"
+                                                           Foreground="{StaticResource BrushTextPrimary}" TextTrimming="CharacterEllipsis"
+                                                           MaxWidth="170" VerticalAlignment="Center"/>
+                                            </StackPanel>
+                                            <StackPanel Orientation="Horizontal" Margin="0,3,0,0">
                                                 <TextBlock Text="{Binding TimeText}" FontSize="11" FontFamily="Consolas"
                                                            Foreground="{StaticResource BrushAccentLight}"/>
                                                 <TextBlock Text="{Binding DurationSeconds, StringFormat=' · ~{0:0.#}s'}" FontSize="10"
@@ -438,13 +463,13 @@
                                         </StackPanel>
 
                                         <!-- Jump button -->
-                                        <Button Grid.Column="2" Style="{StaticResource IconButtonStyle}" Padding="8,4"
+                                        <Button Grid.Column="2" Style="{StaticResource IconButtonStyle}" Padding="6,4"
                                                 Command="{Binding DataContext.JumpToBookmarkCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                                                 CommandParameter="{Binding}"
                                                 ToolTip="Nhảy ngay tới cảnh này">
                                             <ContentControl Style="{StaticResource VectorIconAccent}"
                                                             Content="{StaticResource IconJump}"
-                                                            Width="16" Height="16"/>
+                                                            Width="15" Height="15"/>
                                         </Button>
                                     </Grid>
                                 </DataTemplate>
@@ -486,7 +511,7 @@
                                 MouseLeftButtonDown="SeekBar_PreviewMouseDown"
                                 PreviewMouseLeftButtonUp="SeekBar_PreviewMouseUp"/>
 
-                        <!-- Bookmarks Pins Overlay -->
+                        <!-- Bookmarks Pins Overlay with Rich Preview Tooltips -->
                         <ItemsControl ItemsSource="{Binding Bookmarks}"
                                       IsHitTestVisible="True"
                                       VerticalAlignment="Center"
@@ -512,8 +537,40 @@
                                 <DataTemplate DataType="{x:Type models:MotionBookmark}">
                                     <Button Style="{StaticResource TimelineBookmarkPinStyle}"
                                             Command="{Binding DataContext.JumpToBookmarkCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                            CommandParameter="{Binding}"
-                                            ToolTip="{Binding Description}">
+                                            CommandParameter="{Binding}">
+                                        <!-- Rich Image Preview Tooltip -->
+                                        <Button.ToolTip>
+                                            <ToolTip Background="#1E1E2A" BorderBrush="{StaticResource BrushBorder}" BorderThickness="1"
+                                                     Padding="6">
+                                                <StackPanel Width="180">
+                                                    <!-- Header -->
+                                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,4">
+                                                        <TextBlock Text="{Binding Icon}" FontSize="12" Margin="0,0,4,0"/>
+                                                        <TextBlock Text="{Binding TimeText}" FontSize="11" FontWeight="Bold" FontFamily="Consolas"
+                                                                   Foreground="{StaticResource BrushAccentLight}"/>
+                                                        <TextBlock Text="{Binding DurationSeconds, StringFormat=' (~{0:0.#}s)'}" FontSize="10"
+                                                                   Foreground="{StaticResource BrushTextSecondary}" VerticalAlignment="Center"/>
+                                                    </StackPanel>
+
+                                                    <!-- Preview Thumbnail -->
+                                                    <Border Height="101" CornerRadius="4" ClipToBounds="True" Background="#000000"
+                                                            BorderBrush="{Binding BadgeColor, Converter={StaticResource StrToBrush}}" BorderThickness="1.5"
+                                                            Margin="0,0,0,4">
+                                                        <Grid>
+                                                            <Image Source="{Binding PreviewImage}" Stretch="UniformToFill"/>
+                                                            <TextBlock Text="{Binding Icon}" FontSize="32" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                                       Opacity="0.4" Visibility="{Binding PreviewImage, Converter={StaticResource BoolToVisInv}}"/>
+                                                        </Grid>
+                                                    </Border>
+
+                                                    <!-- Title / Action description -->
+                                                    <TextBlock Text="{Binding Title}" FontSize="10.5" FontWeight="SemiBold"
+                                                               Foreground="{StaticResource BrushTextPrimary}" TextWrapping="Wrap"/>
+                                                </StackPanel>
+                                            </ToolTip>
+                                        </Button.ToolTip>
+
+                                        <!-- Pin Visual -->
                                         <Grid>
                                             <Border Width="16" Height="16" CornerRadius="8"
                                                     Background="{Binding BadgeColor, Converter={StaticResource StrToBrush}}"
