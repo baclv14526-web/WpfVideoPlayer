@@ -326,7 +326,18 @@
         </Setter>
     </Style>
 
-    <!-- Progress Bar Style -->
+    <!-- Lx Button Style (toggle, highlights when active) -->
+    <Style x:Key="LxButtonStyle" TargetType="Button" BasedOn="{StaticResource SpeedButtonStyle}">
+        <Style.Triggers>
+            <DataTrigger Binding="{Binding IsLxMode}" Value="True">
+                <Setter Property="Background"    Value="{StaticResource BrushAccent}"/>
+                <Setter Property="BorderBrush"   Value="{StaticResource BrushAccent}"/>
+                <Setter Property="Foreground"    Value="White"/>
+            </DataTrigger>
+        </Style.Triggers>
+    </Style>
+
+
     <Style x:Key="ScanProgressBarStyle" TargetType="ProgressBar">
         <Setter Property="Height" Value="4"/>
         <Setter Property="Background" Value="{StaticResource BrushBorder}"/>

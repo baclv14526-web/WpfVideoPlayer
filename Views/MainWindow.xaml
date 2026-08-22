@@ -649,11 +649,20 @@
                                    VerticalAlignment="Center" Margin="0,0,10,0"
                                    MaxWidth="130" TextTrimming="CharacterEllipsis"/>
 
+                        <!-- Lx mode toggle button -->
+                        <Button Style="{StaticResource LxButtonStyle}"
+                                Command="{Binding ToggleLxModeCommand}"
+                                ToolTip="Chế độ Lx: tăng tốc tuyến tính từ 1x → 4x trong suốt video"
+                                Margin="0,0,4,0" Padding="8,4">
+                            <TextBlock Text="Lx" FontSize="11" FontWeight="Bold" VerticalAlignment="Center"/>
+                        </Button>
+
                         <!-- Speed selector button -->
                         <Button Style="{StaticResource SpeedButtonStyle}"
                                 ToolTip="Tốc độ phát (Click để chọn, phím [ / ])"
                                 Click="SpeedButton_Click"
                                 Margin="0,0,6,0">
+
                             <Button.ContextMenu>
                                 <ContextMenu>
                                     <MenuItem Header="0.25x" Command="{Binding SetSpeedCommand}" CommandParameter="0.25"/>

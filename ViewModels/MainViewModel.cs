@@ -35,6 +35,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     private bool _isPlaylistVisible = true;
     private bool _isRepeat;
     private bool _isShuffle;
+    private bool _isLxMode;
     private double _playbackSpeed = 1.0;
     private double _volume = 80;
     private double _position;
@@ -71,6 +72,25 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     public bool IsPlaylistVisible { get => _isPlaylistVisible; set => Set(ref _isPlaylistVisible, value); }
     public bool IsRepeat { get => _isRepeat; set => Set(ref _isRepeat, value); }
     public bool IsShuffle { get => _isShuffle; set => Set(ref _isShuffle, value); }
+
+    public bool IsLxMode
+    {
+        get => _isLxMode;
+        set
+        {
+            if (Set(ref _isLxMode, value))
+            {
+                if (!value)
+                {
+                    // Khi tắt Lx, reset về 1x
+                    _playbackSpeed = 1.0;
+                    _mediaPlayer?.SetRate(1.0f);
+                    OnPropertyChanged(nameof(PlaybackSpeedText));
+                }
+                StatusText = value ? "Chế độ Lx: tăng tốc tuyến tính 1x→4x" : "Tốc độ: 1x";
+            }
+        }
+    }
 
     public bool IsScanning { get => _isScanning; set => Set(ref _isScanning, value); }
     public double ScanProgress { get => _scanProgress; set => Set(ref _scanProgress, value); }
@@ -155,6 +175,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     public ICommand SetSpeedCommand { get; }
     public ICommand SpeedUpCommand { get; }
     public ICommand SpeedDownCommand { get; }
+    public ICommand ToggleLxModeCommand { get; }
     public ICommand ScanMotionCommand { get; }
     public ICommand CancelScanCommand { get; }
     public ICommand JumpToBookmarkCommand { get; }
@@ -189,6 +210,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         SetSpeedCommand      = new RelayCommand<object>(SetSpeed);
         SpeedUpCommand       = new RelayCommand(SpeedUp);
         SpeedDownCommand     = new RelayCommand(SpeedDown);
+        ToggleLxModeCommand  = new RelayCommand(() => IsLxMode = !IsLxMode);
         ScanMotionCommand    = new RelayCommand(() => _ = StartMotionScan(), () => HasMedia && !IsScanning);
         CancelScanCommand    = new RelayCommand(CancelMotionScan, () => IsScanning);
         JumpToBookmarkCommand = new RelayCommand<MotionBookmark>(JumpToBookmark);
@@ -277,6 +299,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
 
     private void Stop()
     {
+        if (_isLxMode) IsLxMode = false;
         _mediaPlayer?.Stop();
         _uiTimer.Stop();
         Position = 0;
@@ -388,9 +411,19 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         if (totalMs > 0)
         {
             Duration = totalMs / 1000.0;
-            Position = currentMs / (double)totalMs;
+            var pos = currentMs / (double)totalMs;
+            Position = pos;
             CurrentTimeText = FormatTime(currentMs / 1000);
             TotalTimeText = FormatTime(totalMs / 1000);
+
+            // ── Lx mode: tuyến tính 1x→4x ────────────────────────────────────
+            if (_isLxMode && _mediaPlayer.IsPlaying)
+            {
+                double lxSpeed = 1.0 + 3.0 * pos;   // 1x tại pos=0, 4x tại pos=1
+                _mediaPlayer.SetRate((float)lxSpeed);
+                _playbackSpeed = lxSpeed;
+                OnPropertyChanged(nameof(PlaybackSpeedText));
+            }
         }
     }
 
@@ -431,6 +464,15 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
             Position = 0;
             CurrentTimeText = "0:00:00";
 
+            // Tắt Lx mode khi video kết thúc
+            if (_isLxMode)
+            {
+                _isLxMode = false;
+                OnPropertyChanged(nameof(IsLxMode));
+                _playbackSpeed = 1.0;
+                OnPropertyChanged(nameof(PlaybackSpeedText));
+            }
+
             if (IsRepeat)
             {
                 var idx = GetCurrentPlaylistIndex();
@@ -464,6 +506,8 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     private void SetSpeed(object? param)
     {
         if (param == null) return;
+        // Chọn tốc độ thủ công → tắt Lx mode
+        if (_isLxMode) { _isLxMode = false; OnPropertyChanged(nameof(IsLxMode)); }
         if (param is double d)
         {
             PlaybackSpeed = d;
