@@ -348,6 +348,17 @@
         </Style.Triggers>
     </Style>
 
+    <!-- Pb Button Style (toggle, emerald green when active) -->
+    <Style x:Key="PbButtonStyle" TargetType="Button" BasedOn="{StaticResource SpeedButtonStyle}">
+        <Style.Triggers>
+            <DataTrigger Binding="{Binding IsPbMode}" Value="True">
+                <Setter Property="Background"  Value="#059669"/>
+                <Setter Property="BorderBrush" Value="#059669"/>
+                <Setter Property="Foreground"  Value="White"/>
+            </DataTrigger>
+        </Style.Triggers>
+    </Style>
+
 
     <Style x:Key="ScanProgressBarStyle" TargetType="ProgressBar">
         <Setter Property="Height" Value="4"/>
