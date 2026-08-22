@@ -85,23 +85,20 @@
         </Setter>
     </Style>
 
-    <!-- Slider Style (Seek Bar) -->
+    <!-- Modern Seek Bar Style -->
     <Style x:Key="SeekBarStyle" TargetType="Slider">
+        <Setter Property="Focusable" Value="False"/>
+        <Setter Property="MinHeight" Value="20"/>
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="Slider">
-                    <Grid>
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="Auto" MinHeight="{TemplateBinding MinHeight}"/>
-                            <RowDefinition Height="Auto"/>
-                        </Grid.RowDefinitions>
-                        <Track x:Name="PART_Track" Grid.Row="1">
+                    <Grid Background="Transparent">
+                        <Track x:Name="PART_Track" VerticalAlignment="Center">
                             <Track.DecreaseRepeatButton>
                                 <RepeatButton x:Name="PART_SelectionRange" Command="Slider.DecreaseLarge">
                                     <RepeatButton.Template>
                                         <ControlTemplate TargetType="RepeatButton">
-                                            <Border Height="4" Background="{StaticResource BrushAccent}" CornerRadius="2"/>
+                                            <Border Height="5" Background="{StaticResource BrushAccentLight}" CornerRadius="2.5"/>
                                         </ControlTemplate>
                                     </RepeatButton.Template>
                                 </RepeatButton>
@@ -110,7 +107,7 @@
                                 <RepeatButton Command="Slider.IncreaseLarge">
                                     <RepeatButton.Template>
                                         <ControlTemplate TargetType="RepeatButton">
-                                            <Border Height="4" Background="{StaticResource BrushSeekBarBg}" CornerRadius="2"/>
+                                            <Border Height="5" Background="{StaticResource BrushSeekBarBg}" CornerRadius="2.5"/>
                                         </ControlTemplate>
                                     </RepeatButton.Template>
                                 </RepeatButton>
@@ -120,9 +117,9 @@
                                     <Thumb.Template>
                                         <ControlTemplate TargetType="Thumb">
                                             <Ellipse x:Name="thumb" Width="14" Height="14"
-                                                     Fill="{StaticResource BrushAccentLight}"
-                                                     Stroke="{StaticResource BrushTextPrimary}"
-                                                     StrokeThickness="1"/>
+                                                     Fill="{StaticResource BrushTextPrimary}"
+                                                     Stroke="{StaticResource BrushAccent}"
+                                                     StrokeThickness="2"/>
                                             <ControlTemplate.Triggers>
                                                 <Trigger Property="IsMouseOver" Value="True">
                                                     <Setter TargetName="thumb" Property="Width" Value="16"/>

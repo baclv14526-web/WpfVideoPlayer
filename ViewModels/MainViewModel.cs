@@ -203,6 +203,21 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         }
     }
 
+    // ── Timeline Hover Preview properties ─────────────────────────────────────
+    private readonly VideoPreviewService _previewService = new();
+    private CancellationTokenSource? _hoverPreviewCts;
+    private bool _isTimelineHoverPreviewVisible;
+    private double _timelineHoverLeft;
+    private string _timelineHoverTimeText = "00:00";
+    private BitmapSource? _timelineHoverPreviewImage;
+    private MotionBookmark? _timelineHoverBookmark;
+
+    public bool IsTimelineHoverPreviewVisible { get => _isTimelineHoverPreviewVisible; set => Set(ref _isTimelineHoverPreviewVisible, value); }
+    public double TimelineHoverLeft { get => _timelineHoverLeft; set => Set(ref _timelineHoverLeft, value); }
+    public string TimelineHoverTimeText { get => _timelineHoverTimeText; set => Set(ref _timelineHoverTimeText, value); }
+    public BitmapSource? TimelineHoverPreviewImage { get => _timelineHoverPreviewImage; set => Set(ref _timelineHoverPreviewImage, value); }
+    public MotionBookmark? TimelineHoverBookmark { get => _timelineHoverBookmark; set => Set(ref _timelineHoverBookmark, value); }
+
     // ── Commands ──────────────────────────────────────────────────────────────
     public ICommand PlayPauseCommand { get; }
     public ICommand StopCommand { get; }
@@ -1093,6 +1108,61 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         ScanStatusText = "Đã xóa danh sách bookmark và bộ nhớ đệm";
     }
 
+    // ── Timeline Hover Preview ────────────────────────────────────────────────
+    public void UpdateTimelineHover(double normalizedPos, double trackWidth, double tooltipWidth = 190.0)
+    {
+        if (!HasMedia || _duration <= 0 || trackWidth <= 0)
+        {
+            HideTimelineHover();
+            return;
+        }
+
+        normalizedPos = Math.Clamp(normalizedPos, 0.0, 1.0);
+        double hoverSec = normalizedPos * _duration;
+        TimelineHoverTimeText = FormatTime((long)hoverSec);
+
+        // Center the tooltip on cursor, clamping within track bounds
+        double targetLeft = (normalizedPos * trackWidth) - (tooltipWidth / 2.0);
+        TimelineHoverLeft = Math.Clamp(targetLeft, 0, Math.Max(0, trackWidth - tooltipWidth));
+
+        // Find if there is an active bookmark nearby (+/- 3 seconds)
+        TimelineHoverBookmark = Bookmarks.FirstOrDefault(b => Math.Abs(b.TimeSeconds - hoverSec) <= 3.0);
+
+        IsTimelineHoverPreviewVisible = true;
+
+        // Debounce & fetch frame preview asynchronously
+        _hoverPreviewCts?.Cancel();
+        _hoverPreviewCts = new CancellationTokenSource();
+        var token = _hoverPreviewCts.Token;
+
+        string videoPath = _currentFilePath;
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                var previewBmp = await _previewService.GetPreviewAsync(videoPath, hoverSec, token);
+                if (!token.IsCancellationRequested && previewBmp != null)
+                {
+                    Application.Current.Dispatcher.Invoke(() =>
+                    {
+                        if (IsTimelineHoverPreviewVisible)
+                        {
+                            TimelineHoverPreviewImage = previewBmp;
+                        }
+                    });
+                }
+            }
+            catch { }
+        }, token);
+    }
+
+    public void HideTimelineHover()
+    {
+        _hoverPreviewCts?.Cancel();
+        IsTimelineHoverPreviewVisible = false;
+        TimelineHoverBookmark = null;
+    }
+
     // ── INotifyPropertyChanged ────────────────────────────────────────────────
     public event PropertyChangedEventHandler? PropertyChanged;
     protected void OnPropertyChanged([CallerMemberName] string? name = null)
@@ -1106,6 +1176,8 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     // ── IDisposable ───────────────────────────────────────────────────────────
     public void Dispose()
     {
+        _hoverPreviewCts?.Cancel();
+        _previewService.Dispose();
         _scanCts?.Cancel();
         _uiTimer.Stop();
         if (_mediaPlayer != null)

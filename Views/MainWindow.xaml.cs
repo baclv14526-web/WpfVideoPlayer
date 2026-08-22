@@ -148,6 +148,21 @@ public partial class MainWindow : Window
     private void SeekBar_PreviewMouseUp(object sender, MouseButtonEventArgs e)
         => _vm.SeekEndCommand.Execute(null);
 
+    private void SeekBar_PreviewMouseMove(object sender, MouseEventArgs e)
+    {
+        if (sender is FrameworkElement fe && fe.ActualWidth > 0 && _vm.HasMedia)
+        {
+            var pos = e.GetPosition(fe);
+            double norm = Math.Clamp(pos.X / fe.ActualWidth, 0.0, 1.0);
+            _vm.UpdateTimelineHover(norm, fe.ActualWidth);
+        }
+    }
+
+    private void SeekBar_MouseLeave(object sender, MouseEventArgs e)
+    {
+        _vm.HideTimelineHover();
+    }
+
     // ── Drag & Drop ───────────────────────────────────────────────────────────
     private void VideoArea_DragOver(object sender, DragEventArgs e)
     {
