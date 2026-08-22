@@ -237,8 +237,7 @@ public class YoloOnnxDetector : IDisposable
                 frame.CopyTo(resized);
             }
 
-            _hogFallback.DetectMultiScale(resized, out Rect[] foundBoxes, out double[] weights,
-                0.1, new Size(8, 8), new Size(16, 16), 1.05);
+            Rect[] foundBoxes = _hogFallback.DetectMultiScale(resized);
 
             for (int i = 0; i < foundBoxes.Length; i++)
             {
@@ -253,8 +252,7 @@ public class YoloOnnxDetector : IDisposable
                 w = Math.Clamp(w, 1, frame.Width - x);
                 h = Math.Clamp(h, 1, frame.Height - y);
 
-                float score = weights.Length > i ? (float)Math.Clamp(weights[i], 0.3, 0.99) : 0.6f;
-                result.Add(new DetectedPerson(new Rect(x, y, w, h), score));
+                result.Add(new DetectedPerson(new Rect(x, y, w, h), 0.75f));
             }
         }
         catch
