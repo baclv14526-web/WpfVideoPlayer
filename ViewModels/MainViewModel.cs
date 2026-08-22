@@ -49,12 +49,13 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     private string _currentFilePath = "";
     private int _selectedPlaylistIndex = -1;
 
-    // ── Motion Detection fields ───────────────────────────────────────────────
+    // ── Motion Detection & Cache fields ───────────────────────────────────────
     private bool _isScanning;
     private double _scanProgress;
     private string _scanStatusText = "Chưa quét video (Nhấn 'Quét cảnh ≥2 người' để bắt đầu)";
     private bool _autoScanOnOpen = false;
     private int _activeSidebarTabIndex = 0; // 0 = Playlist, 1 = Motion Bookmarks
+    private string? _scanningVideoPath; // Tracks the video currently being processed in the background
 
     public static readonly double[] AvailableSpeeds = { 0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0, 2.5, 3.0, 4.0, 6.0, 8.0, 10.0, 16.0, 32.0, 64.0 };
 
@@ -291,13 +292,25 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
             {
                 Bookmarks.Add(bm);
             }
-            ScanStatusText = $"Đã nạp {Bookmarks.Count} cảnh từ bộ nhớ đệm (Cache)";
+            if (_isScanning && _scanningVideoPath != null && !string.Equals(_scanningVideoPath, path, StringComparison.OrdinalIgnoreCase))
+            {
+                ScanStatusText = $"Đã nạp {Bookmarks.Count} cảnh (Cache) | Đang quét ngầm: {Path.GetFileName(_scanningVideoPath)}";
+            }
+            else
+            {
+                ScanStatusText = $"Đã nạp {Bookmarks.Count} cảnh từ bộ nhớ đệm (Cache)";
+            }
             StatusText = $"Đã nạp {Bookmarks.Count} cảnh (Cache)";
         }
         else
         {
             Bookmarks.Clear();
-            if (AutoScanOnOpen)
+            if (_isScanning && _scanningVideoPath != null && !string.Equals(_scanningVideoPath, path, StringComparison.OrdinalIgnoreCase))
+            {
+                // Video mới chưa quét, vẫn để chế độ quét tay, không hủy tiến trình quét video cũ
+                ScanStatusText = $"Chưa quét video này (Đang quét ngầm: {Path.GetFileName(_scanningVideoPath)})";
+            }
+            else if (AutoScanOnOpen)
             {
                 _ = StartMotionScan(path);
             }
@@ -328,29 +341,27 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
 
     private void PlayNext()
     {
-        if (Playlist.Count == 0) return;
-        int idx = GetCurrentPlaylistIndex();
-        if (IsShuffle) idx = new Random().Next(Playlist.Count);
-        else idx = (idx + 1) % Playlist.Count;
-        _selectedPlaylistIndex = idx;
-        OnPropertyChanged(nameof(SelectedPlaylistIndex));
-        PlayFile(Playlist[idx].FilePath);
+        if (Playlist.Count <= 1) return;
+        int nextIndex = IsShuffle 
+            ? new Random().Next(0, Playlist.Count)
+            : (SelectedPlaylistIndex + 1) % Playlist.Count;
+        SelectedPlaylistIndex = nextIndex;
+        PlayFile(Playlist[nextIndex].FilePath);
     }
 
     private void PlayPrevious()
     {
-        if (Playlist.Count == 0) return;
-        int idx = GetCurrentPlaylistIndex();
-        idx = (idx - 1 + Playlist.Count) % Playlist.Count;
-        _selectedPlaylistIndex = idx;
-        OnPropertyChanged(nameof(SelectedPlaylistIndex));
-        PlayFile(Playlist[idx].FilePath);
+        if (Playlist.Count <= 1) return;
+        int prevIndex = SelectedPlaylistIndex <= 0 ? Playlist.Count - 1 : SelectedPlaylistIndex - 1;
+        SelectedPlaylistIndex = prevIndex;
+        PlayFile(Playlist[prevIndex].FilePath);
     }
 
     private int GetCurrentPlaylistIndex()
     {
-        if (_selectedPlaylistIndex >= 0) return _selectedPlaylistIndex;
-        return 0;
+        for (int i = 0; i < Playlist.Count; i++)
+            if (Playlist[i].FilePath == _currentFilePath) return i;
+        return -1;
     }
 
     // ── File/Folder open ──────────────────────────────────────────────────────
@@ -611,66 +622,104 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         _scanCts = new CancellationTokenSource();
         var token = _scanCts.Token;
 
+        _scanningVideoPath = target;
         IsScanning = true;
         ScanProgress = 0;
-        ScanStatusText = "Đang phân tích AI YOLO (Nhận diện cảnh từ 2 người trở lên)...";
-        Bookmarks.Clear();
+
+        string targetName = Path.GetFileName(target);
+        ScanStatusText = $"Đang phân tích AI YOLO: {targetName} (≥2 người)...";
+        if (string.Equals(_currentFilePath, target, StringComparison.OrdinalIgnoreCase))
+        {
+            Bookmarks.Clear();
+        }
 
         try
         {
             var progress = new Progress<double>(p =>
             {
                 ScanProgress = p;
-                ScanStatusText = $"Đang quét AI YOLO (≥2 người): {p:0.#}%";
+                ScanStatusText = $"Đang quét AI YOLO [{targetName}]: {p:0.#}%";
             });
 
             var scanResult = await _motionService.ScanVideoAsync(target, progress, token);
 
             if (!scanResult.Success)
             {
-                ScanStatusText = $"Lỗi: {scanResult.ErrorMessage}";
-                StatusText = "Lỗi khi quét video";
+                if (string.Equals(_currentFilePath, target, StringComparison.OrdinalIgnoreCase))
+                {
+                    ScanStatusText = $"Lỗi: {scanResult.ErrorMessage}";
+                    StatusText = "Lỗi khi quét video";
+                }
                 return;
             }
 
-            Bookmarks.Clear();
-            foreach (var bm in scanResult.Bookmarks)
+            // Save to disk cache for subsequent playback
+            if (scanResult.Bookmarks.Count > 0)
             {
-                Bookmarks.Add(bm);
+                _cacheService.SaveBookmarks(target, scanResult.Bookmarks);
             }
 
-            // Save to disk cache for subsequent playback
-            if (Bookmarks.Count > 0)
+            // Update UI if the user is still viewing this video
+            if (string.Equals(_currentFilePath, target, StringComparison.OrdinalIgnoreCase))
             {
-                _cacheService.SaveBookmarks(target, Bookmarks);
-                ScanStatusText = $"Đã phát hiện và lưu cache {Bookmarks.Count} cảnh (≥2 người)";
-                StatusText = $"Phát hiện {Bookmarks.Count} cảnh (≥2 người)";
+                Bookmarks.Clear();
+                foreach (var bm in scanResult.Bookmarks)
+                {
+                    Bookmarks.Add(bm);
+                }
+
+                if (Bookmarks.Count > 0)
+                {
+                    ScanStatusText = $"Đã phát hiện và lưu cache {Bookmarks.Count} cảnh (≥2 người)";
+                    StatusText = $"Phát hiện {Bookmarks.Count} cảnh (≥2 người)";
+                }
+                else
+                {
+                    ScanStatusText = $"Đã quét xong {scanResult.FramesProcessed} khung hình (Không có cảnh ≥2 người)";
+                    StatusText = "Không có cảnh ≥2 người";
+                }
             }
             else
             {
-                ScanStatusText = $"Đã quét xong {scanResult.FramesProcessed} khung hình (Không có cảnh ≥2 người)";
-                StatusText = "Không có cảnh ≥2 người";
+                // User switched to another video while target was scanning
+                StatusText = $"Đã quét xong & lưu cache cho: {targetName} ({scanResult.Bookmarks.Count} cảnh)";
+                if (Bookmarks.Count == 0)
+                {
+                    ScanStatusText = $"Đã quét xong video trước [{targetName}] | Bấm 'Quét cảnh' để quét video hiện tại";
+                }
             }
         }
         catch (OperationCanceledException)
         {
-            ScanStatusText = "Đã dừng quét";
+            if (string.Equals(_currentFilePath, target, StringComparison.OrdinalIgnoreCase))
+            {
+                ScanStatusText = "Đã dừng quét";
+            }
         }
         catch (Exception ex)
         {
-            ScanStatusText = $"Lỗi khi quét: {ex.Message}";
+            if (string.Equals(_currentFilePath, target, StringComparison.OrdinalIgnoreCase))
+            {
+                ScanStatusText = $"Lỗi khi quét: {ex.Message}";
+            }
         }
         finally
         {
-            IsScanning = false;
+            if (string.Equals(_scanningVideoPath, target, StringComparison.OrdinalIgnoreCase))
+            {
+                _scanningVideoPath = null;
+                IsScanning = false;
+            }
         }
     }
 
     public void CancelMotionScan()
     {
         _scanCts?.Cancel();
+        string? name = _scanningVideoPath != null ? Path.GetFileName(_scanningVideoPath) : null;
+        _scanningVideoPath = null;
         IsScanning = false;
-        ScanStatusText = "Đã hủy quét";
+        ScanStatusText = name != null ? $"Đã hủy tiến trình quét: {name}" : "Đã hủy quét";
     }
 
     public void JumpToBookmark(MotionBookmark? bookmark)
