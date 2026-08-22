@@ -129,7 +129,8 @@ public class MotionDetectionService
                 if (msec > 0) durationSeconds = msec / 1000.0;
             }
 
-            int frameStep = Math.Max(1, (int)(fps * SampleIntervalSeconds));
+            // Optimize scan speed for medium-spec laptops: scan 3 to 5 frames/sec, jumping 6 to 10 frames per step
+            int frameStep = Math.Clamp((int)Math.Round(fps / 4.0), 6, 10);
 
             using var yoloDetector = new YoloOnnxDetector();
 

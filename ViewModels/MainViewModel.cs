@@ -914,7 +914,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         ScanProgress = 0;
 
         string targetName = Path.GetFileName(target);
-        ScanStatusText = $"Đang phân tích AI YOLO: {targetName} (≥2 người)...";
+        ScanStatusText = $"Đang phân tích AI YOLO11: {targetName} (≥2 người)...";
         if (string.Equals(_currentFilePath, target, StringComparison.OrdinalIgnoreCase))
         {
             Bookmarks.Clear();
@@ -925,7 +925,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
             var progress = new Progress<double>(p =>
             {
                 ScanProgress = p;
-                ScanStatusText = $"Đang quét AI YOLO [{targetName}]: {p:0.#}%";
+                ScanStatusText = $"Đang quét AI YOLO11 [{targetName}]: {p:0.#}%";
             });
 
             var scanResult = await _motionService.ScanVideoAsync(target, progress, token);

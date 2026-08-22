@@ -36,12 +36,22 @@ public class YoloOnnxDetector : IDisposable
 
     public YoloOnnxDetector(string? modelPath = null)
     {
-        // Try locating ONNX model
+        // Try locating ONNX model (prioritizing YOLOv11)
         string? targetModel = modelPath;
         if (string.IsNullOrEmpty(targetModel) || !File.Exists(targetModel))
         {
             var searchPaths = new[]
             {
+                Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "models", "yolo11n.onnx"),
+                Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "models", "yolo11s.onnx"),
+                Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "models", "yolov11n.onnx"),
+                Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "models", "yolov11s.onnx"),
+                Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "models", "yolo11.onnx"),
+                Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "models", "yolov11.onnx"),
+                Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "yolo11n.onnx"),
+                Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "yolo11s.onnx"),
+                Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "yolov11n.onnx"),
+                Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "yolov11s.onnx"),
                 Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "models", "yolov8s.onnx"),
                 Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "models", "yolov8n.onnx"),
                 Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "models", "yolo_small.onnx"),
@@ -59,7 +69,8 @@ public class YoloOnnxDetector : IDisposable
                 var options = new SessionOptions
                 {
                     GraphOptimizationLevel = GraphOptimizationLevel.ORT_ENABLE_ALL,
-                    ExecutionMode = ExecutionMode.ORT_SEQUENTIAL
+                    ExecutionMode = ExecutionMode.ORT_SEQUENTIAL,
+                    IntraOpNumThreads = Math.Clamp(Environment.ProcessorCount / 2, 2, 4) // Laptop CPU optimization
                 };
                 _session = new InferenceSession(targetModel, options);
                 _inputName = _session.InputMetadata.Keys.FirstOrDefault() ?? "images";
