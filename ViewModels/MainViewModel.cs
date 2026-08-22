@@ -624,10 +624,17 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
                 ScanStatusText = $"Đang quét AI YOLO (≥2 người): {p:0.#}%";
             });
 
-            var results = await _motionService.ScanVideoAsync(target, progress, token);
+            var scanResult = await _motionService.ScanVideoAsync(target, progress, token);
+
+            if (!scanResult.Success)
+            {
+                ScanStatusText = $"Lỗi: {scanResult.ErrorMessage}";
+                StatusText = "Lỗi khi quét video";
+                return;
+            }
 
             Bookmarks.Clear();
-            foreach (var bm in results)
+            foreach (var bm in scanResult.Bookmarks)
             {
                 Bookmarks.Add(bm);
             }
@@ -636,12 +643,14 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
             if (Bookmarks.Count > 0)
             {
                 _cacheService.SaveBookmarks(target, Bookmarks);
+                ScanStatusText = $"Đã phát hiện và lưu cache {Bookmarks.Count} cảnh (≥2 người)";
+                StatusText = $"Phát hiện {Bookmarks.Count} cảnh (≥2 người)";
             }
-
-            ScanStatusText = Bookmarks.Count > 0
-                ? $"Đã phát hiện và lưu cache {Bookmarks.Count} cảnh (≥2 người)"
-                : "Không phát hiện cảnh có từ 2 người trở lên";
-            StatusText = $"Phát hiện {Bookmarks.Count} cảnh (≥2 người)";
+            else
+            {
+                ScanStatusText = $"Đã quét xong {scanResult.FramesProcessed} khung hình (Không có cảnh ≥2 người)";
+                StatusText = "Không có cảnh ≥2 người";
+            }
         }
         catch (OperationCanceledException)
         {

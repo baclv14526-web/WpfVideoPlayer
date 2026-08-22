@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Media;
@@ -13,39 +15,120 @@ namespace WpfVideoPlayer.Services;
 
 public class MotionDetectionService
 {
-    private const int AnalysisWidth = 480;
-    private const int AnalysisHeight = 270;
+    private const int AnalysisWidth = 640;
+    private const int AnalysisHeight = 360;
     private const double SampleIntervalSeconds = 0.5; // Analyze 2 frames per second for high speed
     private const double SceneChangeHistThreshold = 0.52; // Histogram correlation < 0.52 indicates scene cut
     private const double MinBookmarkDistanceSeconds = 6.0; // Minimum time gap between similar bookmarks
     private const double VisualSimilarityThreshold = 0.72; // Hist correlation >= 0.72 means same visual scene
     private const int MinRequiredPersons = 2; // ONLY bookmark moments with 2 or more people
 
+    [DllImport("kernel32.dll", CharSet = CharSet.Auto, SetLastError = true)]
+    private static extern uint GetShortPathName(
+        [MarshalAs(UnmanagedType.LPTStr)] string lpszLongPath,
+        [MarshalAs(UnmanagedType.LPTStr)] StringBuilder lpszShortPath,
+        uint cchBuffer);
+
+    private static string GetSafeAsciiPath(string fullPath)
+    {
+        try
+        {
+            var shortBuffer = new StringBuilder(1024);
+            uint result = GetShortPathName(fullPath, shortBuffer, (uint)shortBuffer.Capacity);
+            if (result > 0 && result < shortBuffer.Capacity)
+            {
+                string shortPath = shortBuffer.ToString();
+                if (File.Exists(shortPath)) return shortPath;
+            }
+        }
+        catch { }
+        return fullPath;
+    }
+
+    /// <summary>
+    /// Opens VideoCapture safely with FFMPEG / Unicode fallback.
+    /// </summary>
+    private static VideoCapture? OpenVideoCapture(string videoPath)
+    {
+        if (string.IsNullOrEmpty(videoPath) || !File.Exists(videoPath))
+            return null;
+
+        // 1. Try standard open
+        try
+        {
+            var cap = new VideoCapture(videoPath, VideoCaptureAPIs.FFMPEG);
+            if (cap.IsOpened()) return cap;
+            cap.Dispose();
+        }
+        catch { }
+
+        // 2. Try default backend
+        try
+        {
+            var cap = new VideoCapture(videoPath);
+            if (cap.IsOpened()) return cap;
+            cap.Dispose();
+        }
+        catch { }
+
+        // 3. Try Windows short path (8.3 ASCII for Vietnamese / Unicode names)
+        try
+        {
+            string shortPath = GetSafeAsciiPath(videoPath);
+            if (!string.Equals(shortPath, videoPath, StringComparison.OrdinalIgnoreCase))
+            {
+                var cap = new VideoCapture(shortPath, VideoCaptureAPIs.FFMPEG);
+                if (cap.IsOpened()) return cap;
+                cap.Dispose();
+
+                cap = new VideoCapture(shortPath);
+                if (cap.IsOpened()) return cap;
+                cap.Dispose();
+            }
+        }
+        catch { }
+
+        return null;
+    }
+
     /// <summary>
     /// Analyzes video using YOLO Small and OpenCV, ONLY bookmarking distinct moments 
     /// containing 2 or more persons (struggles, wrestling, group interactions) with image previews.
     /// </summary>
-    public async Task<List<MotionBookmark>> ScanVideoAsync(
+    public async Task<ScanResult> ScanVideoAsync(
         string videoPath,
         IProgress<double>? progress = null,
         CancellationToken cancellationToken = default)
     {
         return await Task.Run(() =>
         {
-            var results = new List<MotionBookmark>();
+            var bookmarks = new List<MotionBookmark>();
 
             if (string.IsNullOrEmpty(videoPath) || !File.Exists(videoPath))
-                return results;
+                return new ScanResult(bookmarks, 0, false, "Tệp không tồn tại");
 
-            using var capture = new VideoCapture(videoPath);
-            if (!capture.IsOpened())
-                return results;
+            using var capture = OpenVideoCapture(videoPath);
+            if (capture == null || !capture.IsOpened())
+            {
+                return new ScanResult(bookmarks, 0, false, "Không thể mở luồng giải mã video (Codec hoặc định dạng không hỗ trợ)");
+            }
 
             int totalFrames = (int)capture.Get(VideoCaptureProperties.FrameCount);
             double fps = capture.Get(VideoCaptureProperties.Fps);
             if (fps <= 0 || double.IsNaN(fps)) fps = 30.0;
 
-            double durationSeconds = totalFrames > 0 ? totalFrames / fps : 0;
+            double durationSeconds = 0;
+            if (totalFrames > 0)
+            {
+                durationSeconds = totalFrames / fps;
+            }
+            else
+            {
+                // Fallback duration estimation from VideoCapture
+                double msec = capture.Get(VideoCaptureProperties.PosMsec);
+                if (msec > 0) durationSeconds = msec / 1000.0;
+            }
+
             int frameStep = Math.Max(1, (int)(fps * SampleIntervalSeconds));
 
             using var yoloDetector = new YoloOnnxDetector();
@@ -62,17 +145,27 @@ public class MotionDetectionService
             using var prevHist = new Mat();
             using var currentHist = new Mat();
 
-            int currentFrameIndex = 0;
+            int framesProcessed = 0;
+            int totalReadAttempts = 0;
 
-            while (currentFrameIndex < totalFrames)
+            while (true)
             {
                 cancellationToken.ThrowIfCancellationRequested();
 
-                capture.Set(VideoCaptureProperties.PosFrames, currentFrameIndex);
-                if (!capture.Read(frame) || frame.Empty())
+                // Stop condition when totalFrames is known
+                if (totalFrames > 0 && totalReadAttempts >= totalFrames)
                     break;
 
-                double timeSec = currentFrameIndex / fps;
+                if (!capture.Read(frame) || frame.Empty())
+                {
+                    // If read returns false, we have reached the end of stream
+                    break;
+                }
+
+                totalReadAttempts++;
+                framesProcessed++;
+
+                double timeSec = (totalReadAttempts - 1) / fps;
 
                 // 1. Resize for fast AI processing
                 Cv2.Resize(frame, resized, new Size(AnalysisWidth, AnalysisHeight));
@@ -104,7 +197,7 @@ public class MotionDetectionService
                 }
 
                 // 4. Person detection with YOLO Small
-                var detectedPersons = yoloDetector.DetectPersons(resized, confThreshold: 0.30f);
+                var detectedPersons = yoloDetector.DetectPersons(resized, confThreshold: 0.28f);
                 int personCount = detectedPersons.Count;
 
                 // ── ONLY FILTER MOMENTS WITH 2 OR MORE PERSONS ─────────────────
@@ -124,7 +217,7 @@ public class MotionDetectionService
                                                     detectedPersons[j].BoundingBox.Y + detectedPersons[j].BoundingBox.Height / 2);
                             double distance = Math.Sqrt(Math.Pow(centerA.X - centerB.X, 2) + Math.Pow(centerA.Y - centerB.Y, 2));
 
-                            if (iou > 0.08f || distance < (detectedPersons[i].BoundingBox.Width + detectedPersons[j].BoundingBox.Width) * 0.45)
+                            if (iou > 0.06f || distance < (detectedPersons[i].BoundingBox.Width + detectedPersons[j].BoundingBox.Width) * 0.50)
                             {
                                 hasBoxOverlap = true;
                                 break;
@@ -133,7 +226,7 @@ public class MotionDetectionService
                         if (hasBoxOverlap) break;
                     }
 
-                    if (hasBoxOverlap && motionRatio >= 0.025)
+                    if (hasBoxOverlap && motionRatio >= 0.02)
                     {
                         isGroupStruggle = true;
                     }
@@ -163,12 +256,27 @@ public class MotionDetectionService
                 blurred.CopyTo(prevGray);
                 currentHist.CopyTo(prevHist);
 
-                currentFrameIndex += frameStep;
+                // Skip next (frameStep - 1) frames quickly via Grab()
+                for (int s = 1; s < frameStep; s++)
+                {
+                    if (totalFrames > 0 && totalReadAttempts >= totalFrames)
+                        break;
+
+                    if (!capture.Grab()) break;
+                    totalReadAttempts++;
+                }
+
+                // Report progress
                 if (totalFrames > 0)
                 {
-                    double progressPercent = Math.Min(100.0, (currentFrameIndex / (double)totalFrames) * 100.0);
+                    double progressPercent = Math.Min(99.0, (totalReadAttempts / (double)totalFrames) * 100.0);
                     progress?.Report(progressPercent);
                 }
+            }
+
+            if (durationSeconds <= 0 && framesProcessed > 0)
+            {
+                durationSeconds = totalReadAttempts / fps;
             }
 
             progress?.Report(100.0);
@@ -234,7 +342,7 @@ public class MotionDetectionService
                         bestEvent.IsGroupStruggle,
                         bestEvent.IsSceneChange);
 
-                    results.Add(new MotionBookmark
+                    bookmarks.Add(new MotionBookmark
                     {
                         TimeSeconds = bestEvent.TimeSec,
                         TimeText = FormatTime((long)bestEvent.TimeSec),
@@ -255,7 +363,7 @@ public class MotionDetectionService
                 }
             }
 
-            return results;
+            return new ScanResult(bookmarks, framesProcessed, true, string.Empty);
         }, cancellationToken);
     }
 
@@ -290,7 +398,7 @@ public class MotionDetectionService
             double scaleX = (double)thumbW / originalFrame.Width;
             double scaleY = (double)thumbH / originalFrame.Height;
 
-            // Draw bounding boxes on all detected persons in the group
+            // Draw bounding boxes on all detected persons/body parts in the group
             int personIdx = 1;
             foreach (var p in persons)
             {
@@ -299,12 +407,19 @@ public class MotionDetectionService
                 int bw = (int)(p.BoundingBox.Width * scaleX);
                 int bh = (int)(p.BoundingBox.Height * scaleY);
 
-                var boxColor = isGroupStruggle ? new Scalar(56, 56, 255)  // Red BGR
-                                               : new Scalar(66, 177, 255); // Amber BGR
+                var boxColor = isGroupStruggle || p.Part == DetectedBodyPart.GrapplingPose
+                             ? new Scalar(56, 56, 255)  // Red BGR
+                             : p.Part == DetectedBodyPart.UpperBody
+                             ? new Scalar(63, 121, 255) // Orange BGR
+                             : new Scalar(66, 177, 255); // Amber BGR
 
                 Cv2.Rectangle(preview, new Rect(bx, by, bw, bh), boxColor, 2);
 
-                string label = isGroupStruggle ? $"Vat lon #{personIdx}" : $"Nguoi #{personIdx}";
+                string label = isGroupStruggle ? $"Vat lon #{personIdx}"
+                             : p.Part == DetectedBodyPart.GrapplingPose ? $"Tu the vat #{personIdx}"
+                             : p.Part == DetectedBodyPart.UpperBody ? $"Ban than #{personIdx}"
+                             : $"Nguoi #{personIdx}";
+
                 Cv2.PutText(preview, label, new Point(bx, Math.Max(14, by - 4)),
                     HersheyFonts.HersheySimplex, 0.38, boxColor, 1, LineTypes.AntiAlias);
                 personIdx++;
@@ -313,13 +428,17 @@ public class MotionDetectionService
             // Top-left indicator badge
             if (isGroupStruggle)
             {
-                Cv2.Rectangle(preview, new Rect(6, 6, 96, 20), new Scalar(0, 0, 0), -1);
+                Cv2.Rectangle(preview, new Rect(6, 6, 106, 20), new Scalar(0, 0, 0), -1);
                 Cv2.PutText(preview, $"XO XAT ({persons.Count}P)", new Point(10, 20), HersheyFonts.HersheySimplex, 0.35, new Scalar(56, 56, 255), 1);
             }
             else
             {
-                Cv2.Rectangle(preview, new Rect(6, 6, 88, 20), new Scalar(0, 0, 0), -1);
-                Cv2.PutText(preview, $"NHOM {persons.Count} NGUOI", new Point(10, 20), HersheyFonts.HersheySimplex, 0.35, new Scalar(66, 177, 255), 1);
+                bool hasGrapple = persons.Any(x => x.Part == DetectedBodyPart.GrapplingPose);
+                string badgeText = hasGrapple ? $"VAT LON ({persons.Count}P)" : $"NHOM {persons.Count} NGUOI";
+                int badgeW = hasGrapple ? 98 : 92;
+
+                Cv2.Rectangle(preview, new Rect(6, 6, badgeW, 20), new Scalar(0, 0, 0), -1);
+                Cv2.PutText(preview, badgeText, new Point(10, 20), HersheyFonts.HersheySimplex, 0.35, new Scalar(66, 177, 255), 1);
             }
 
             return MatToBitmapSource(preview);
@@ -387,3 +506,9 @@ public class MotionDetectionService
         public bool IsSceneChange { get; init; }
     }
 }
+
+public record ScanResult(
+    List<MotionBookmark> Bookmarks,
+    int FramesProcessed,
+    bool Success,
+    string ErrorMessage);

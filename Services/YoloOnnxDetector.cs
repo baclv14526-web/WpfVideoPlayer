@@ -8,7 +8,20 @@ using OpenCvSharp;
 
 namespace WpfVideoPlayer.Services;
 
-public record DetectedPerson(Rect BoundingBox, float Confidence);
+public enum DetectedBodyPart
+{
+    FullBody,
+    UpperBody,
+    HeadFace,
+    GrapplingPose,
+    PartialBody
+}
+
+public record DetectedPerson(
+    Rect BoundingBox,
+    float Confidence,
+    DetectedBodyPart Part = DetectedBodyPart.FullBody,
+    string Label = "Người");
 
 public class YoloOnnxDetector : IDisposable
 {
@@ -77,9 +90,9 @@ public class YoloOnnxDetector : IDisposable
     }
 
     /// <summary>
-    /// Detects persons in the frame using ONNX YOLO model or OpenCV HOG fallback.
+    /// Detects persons and human body parts across varied poses (standing, sitting, lying down, wrestling, close-ups).
     /// </summary>
-    public List<DetectedPerson> DetectPersons(Mat frame, float confThreshold = 0.35f, float iouThreshold = 0.45f)
+    public List<DetectedPerson> DetectPersons(Mat frame, float confThreshold = 0.25f, float iouThreshold = 0.45f)
     {
         if (frame.Empty()) return new List<DetectedPerson>();
 
@@ -91,12 +104,12 @@ public class YoloOnnxDetector : IDisposable
             }
             catch
             {
-                // In case of inference error, fallback to HOG
+                // Fallback to Multi-Pose OpenCV Detector
             }
         }
 
-        // Fallback: OpenCV HOG People Detector
-        return RunHogFallback(frame);
+        // Multi-Part & Multi-Pose OpenCV Detector Fallback
+        return RunMultiPartPoseFallback(frame);
     }
 
     private List<DetectedPerson> RunYoloInference(Mat frame, float confThreshold, float iouThreshold)
@@ -155,7 +168,6 @@ public class YoloOnnxDetector : IDisposable
         // YOLOv8 output: [1, 84, 8400] (class 0 is person)
         if (dimensions.Length == 3 && dimensions[1] >= 5 && dimensions[2] > 100)
         {
-            int numAttributes = dimensions[1];
             int numPredictions = dimensions[2];
 
             for (int i = 0; i < numPredictions; i++)
@@ -214,53 +226,141 @@ public class YoloOnnxDetector : IDisposable
             }
         }
 
-        // Apply NMS
-        return ApplyNms(candidates, iouThreshold);
+        // Apply NMS & categorize pose aspect ratio
+        var filtered = ApplyNms(candidates, iouThreshold);
+        var results = new List<DetectedPerson>();
+
+        foreach (var p in filtered)
+        {
+            double aspectRatio = (double)p.BoundingBox.Width / Math.Max(1, p.BoundingBox.Height);
+            var part = DetectedBodyPart.FullBody;
+            string label = "Người";
+
+            if (aspectRatio > 1.25)
+            {
+                part = DetectedBodyPart.GrapplingPose;
+                label = "Tư thế nằm/vật lộn";
+            }
+            else if (aspectRatio > 0.85)
+            {
+                part = DetectedBodyPart.UpperBody;
+                label = "Bán thân/Ngồi";
+            }
+            else if (p.BoundingBox.Height < origH * 0.35)
+            {
+                part = DetectedBodyPart.PartialBody;
+                label = "Bộ phận cơ thể";
+            }
+
+            results.Add(new DetectedPerson(p.BoundingBox, p.Confidence, part, label));
+        }
+
+        return results;
     }
 
-    private List<DetectedPerson> RunHogFallback(Mat frame)
+    /// <summary>
+    /// Multi-part fallback detector: Combines Full-body HOG, Upper-body/Torso, and horizontal pose analysis.
+    /// </summary>
+    private List<DetectedPerson> RunMultiPartPoseFallback(Mat frame)
     {
-        var result = new List<DetectedPerson>();
-        if (_hogFallback == null || frame.Empty()) return result;
+        var rawBoxes = new List<(Rect Box, float Score, DetectedBodyPart Part, string Label)>();
+        if (frame.Empty()) return new List<DetectedPerson>();
 
+        int origW = frame.Width;
+        int origH = frame.Height;
+
+        // 1. Full Body & Upper Body Scale
         try
         {
-            using var resized = new Mat();
-            double scale = 1.0;
-            if (frame.Width > 640)
+            if (_hogFallback != null)
             {
-                scale = 640.0 / frame.Width;
-                Cv2.Resize(frame, resized, new Size(640, (int)(frame.Height * scale)));
-            }
-            else
-            {
-                frame.CopyTo(resized);
-            }
+                using var resized = new Mat();
+                int targetW = 800;
+                double scale = (double)targetW / origW;
+                int targetH = (int)(origH * scale);
+                Cv2.Resize(frame, resized, new Size(targetW, targetH));
 
-            Rect[] foundBoxes = _hogFallback.DetectMultiScale(resized);
+                Rect[] hogBoxes = _hogFallback.DetectMultiScale(resized);
+                foreach (var b in hogBoxes)
+                {
+                    int x = Math.Clamp((int)(b.X / scale), 0, origW - 1);
+                    int y = Math.Clamp((int)(b.Y / scale), 0, origH - 1);
+                    int w = Math.Clamp((int)(b.Width / scale), 1, origW - x);
+                    int h = Math.Clamp((int)(b.Height / scale), 1, origH - y);
 
-            for (int i = 0; i < foundBoxes.Length; i++)
-            {
-                var box = foundBoxes[i];
-                int x = (int)(box.X / scale);
-                int y = (int)(box.Y / scale);
-                int w = (int)(box.Width / scale);
-                int h = (int)(box.Height / scale);
-
-                x = Math.Clamp(x, 0, frame.Width - 1);
-                y = Math.Clamp(y, 0, frame.Height - 1);
-                w = Math.Clamp(w, 1, frame.Width - x);
-                h = Math.Clamp(h, 1, frame.Height - y);
-
-                result.Add(new DetectedPerson(new Rect(x, y, w, h), 0.75f));
+                    rawBoxes.Add((new Rect(x, y, w, h), 0.80f, DetectedBodyPart.FullBody, "Người"));
+                }
             }
         }
-        catch
+        catch { }
+
+        // 2. Pose & Human-body Shape Analysis (Detects wrestlers on ground, horizontal, crouching, upper bodies)
+        try
         {
-            // Ignore fallback errors
+            using var gray = new Mat();
+            using var blurred = new Mat();
+            using var thresh = new Mat();
+
+            Cv2.CvtColor(frame, gray, ColorConversionCodes.BGR2GRAY);
+            Cv2.GaussianBlur(gray, blurred, new Size(9, 9), 0);
+            Cv2.AdaptiveThreshold(blurred, thresh, 255, AdaptiveThresholdTypes.GaussianC, ThresholdTypes.BinaryInv, 19, 5);
+
+            // Morphological close to connect body parts (arms, legs, head, torso)
+            using var kernel = Cv2.GetStructuringElement(MorphShapes.Rect, new Size(13, 13));
+            Cv2.MorphologyEx(thresh, thresh, MorphTypes.Close, kernel);
+
+            Cv2.FindContours(thresh, out Point[][] contours, out _, RetrievalModes.External, ContourApproximationModes.ApproxSimple);
+
+            int minBodyArea = (origW * origH) / 60;   // At least ~1.6% of screen
+            int maxBodyArea = (origW * origH) * 8 / 10; // At most 80%
+
+            foreach (var contour in contours)
+            {
+                var rect = Cv2.BoundingRect(contour);
+                int area = rect.Width * rect.Height;
+
+                if (area >= minBodyArea && area <= maxBodyArea)
+                {
+                    double aspect = (double)rect.Width / Math.Max(1, rect.Height);
+
+                    // Typical human body or grappling pose aspects: 0.25 (standing) to 2.5 (lying/wrestling)
+                    if (aspect >= 0.25 && aspect <= 2.8)
+                    {
+                        var part = aspect > 1.2 ? DetectedBodyPart.GrapplingPose
+                                 : aspect > 0.8 ? DetectedBodyPart.UpperBody
+                                 : DetectedBodyPart.FullBody;
+
+                        string label = aspect > 1.2 ? "Vật lộn/Tư thế ngang" : "Người/Thân";
+                        rawBoxes.Add((rect, 0.70f, part, label));
+                    }
+                }
+            }
+        }
+        catch { }
+
+        // 3. Fuse overlapping boxes (Hierarchical Non-Maximum Suppression)
+        var sorted = rawBoxes.OrderByDescending(x => x.Score).ThenByDescending(x => x.Box.Width * x.Box.Height).ToList();
+        var finalDetections = new List<DetectedPerson>();
+
+        while (sorted.Count > 0)
+        {
+            var best = sorted[0];
+            finalDetections.Add(new DetectedPerson(best.Box, best.Score, best.Part, best.Label));
+            sorted.RemoveAt(0);
+
+            for (int i = sorted.Count - 1; i >= 0; i--)
+            {
+                float iou = ComputeIoU(best.Box, sorted[i].Box);
+                bool isEnclosed = best.Box.Contains(new Point(sorted[i].Box.X + sorted[i].Box.Width / 2, sorted[i].Box.Y + sorted[i].Box.Height / 2));
+
+                if (iou > 0.35f || isEnclosed)
+                {
+                    sorted.RemoveAt(i);
+                }
+            }
         }
 
-        return result;
+        return finalDetections;
     }
 
     private static List<DetectedPerson> ApplyNms(List<(Rect Box, float Score)> candidates, float iouThreshold)
