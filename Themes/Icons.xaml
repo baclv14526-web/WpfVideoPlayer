@@ -90,6 +90,12 @@
     <!-- Cancel / Stop square circle -->
     <StreamGeometry x:Key="IconCancelScan">M12,2A10,10 0 0,1 22,12A10,10 0 0,1 12,22A10,10 0 0,1 2,12A10,10 0 0,1 12,2M12,4A8,8 0 0,0 4,12A8,8 0 0,0 12,20A8,8 0 0,0 20,12A8,8 0 0,0 12,4M9,9H15V15H9V9Z</StreamGeometry>
 
+    <!-- Replay 30 seconds -->
+    <StreamGeometry x:Key="IconReplay30">M12,5V1L7,6L12,11V7A6,6 0 0,1 18,13A6,6 0 0,1 12,19A6,6 0 0,1 6,13H4A8,8 0 0,0 12,21A8,8 0 0,0 20,13A8,8 0 0,0 12,5Z</StreamGeometry>
+
+    <!-- Forward 60 seconds (1 minute) -->
+    <StreamGeometry x:Key="IconForward60">M12,5V1L17,6L12,11V7A6,6 0 0,0 6,13A6,6 0 0,0 12,19A6,6 0 0,0 18,13H20A8,8 0 0,1 12,21A8,8 0 0,1 4,13A8,8 0 0,1 12,5Z</StreamGeometry>
+
     <!-- ================================================
          REUSABLE: VectorIcon control style
          Usage:

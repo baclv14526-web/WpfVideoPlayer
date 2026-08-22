@@ -54,7 +54,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     private bool _autoScanOnOpen = true;
     private int _activeSidebarTabIndex = 0; // 0 = Playlist, 1 = Motion Bookmarks
 
-    public static readonly double[] AvailableSpeeds = { 0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0, 2.5, 3.0, 4.0 };
+    public static readonly double[] AvailableSpeeds = { 0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 2.0, 2.5, 3.0, 4.0, 6.0, 8.0, 10.0 };
 
     public ObservableCollection<PlaylistItem> Playlist { get; } = new();
     public ObservableCollection<MotionBookmark> Bookmarks { get; } = new();
@@ -150,6 +150,8 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     public ICommand SeekEndCommand { get; }
     public ICommand SeekBackCommand { get; }
     public ICommand SeekForwardCommand { get; }
+    public ICommand SeekBack30SecCommand { get; }
+    public ICommand SeekForward1MinCommand { get; }
     public ICommand SetSpeedCommand { get; }
     public ICommand SpeedUpCommand { get; }
     public ICommand SpeedDownCommand { get; }
@@ -182,6 +184,8 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         SeekEndCommand       = new RelayCommand(SeekEnd);
         SeekBackCommand      = new RelayCommand(() => SeekRelative(-5000));
         SeekForwardCommand   = new RelayCommand(() => SeekRelative(5000));
+        SeekBack30SecCommand = new RelayCommand(() => SeekRelative(-30000));
+        SeekForward1MinCommand = new RelayCommand(() => SeekRelative(60000));
         SetSpeedCommand      = new RelayCommand<object>(SetSpeed);
         SpeedUpCommand       = new RelayCommand(SpeedUp);
         SpeedDownCommand     = new RelayCommand(SpeedDown);
@@ -499,6 +503,12 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         if (_mediaPlayer == null || !HasMedia || _duration <= 0) return;
         var newTime = Math.Clamp(_mediaPlayer.Time + msDelta, 0, (long)(_duration * 1000));
         _mediaPlayer.Time = newTime;
+
+        long newSec = newTime / 1000;
+        string sign = msDelta > 0 ? "+" : "-";
+        long absSec = Math.Abs(msDelta) / 1000;
+        string deltaStr = absSec >= 60 ? $"{absSec / 60}p{absSec % 60:D2}" : $"{absSec}s";
+        StatusText = $"{sign}{deltaStr} ({FormatTime(newSec)} / {FormatTime((long)_duration)})";
     }
 
     private string GetVideoInfo()
