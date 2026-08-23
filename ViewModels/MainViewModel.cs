@@ -69,6 +69,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     // ── Zoom & Rotate fields ──────────────────────────────────────────────────
     private float _videoZoom = 0f;     // 0 = Fit (auto), 0.25/0.5/1.0/1.5/2.0
     private int   _videoRotation = 0;  // 0 / 90 / 180 / 270
+    private int   _libVlcRotation = 0; // rotation LibVLC was initialized with
     private bool  _isApplyingRotation = false; // guard against re-entrant rotation
 
     // ── Motion Detection & Cache fields ───────────────────────────────────────
@@ -371,26 +372,59 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     }
 
     // ── LibVLC init ───────────────────────────────────────────────────────────
+    private static string[] BuildLibVlcArgs(int rotation)
+    {
+        var args = new List<string> { "--no-video-title-show", "--no-osd", "--verbose=0" };
+        if (rotation != 0)
+        {
+            args.Add("--video-filter=transform");
+            args.Add($"--transform-type={rotation}");
+        }
+        return args.ToArray();
+    }
+
+    private void AttachMediaPlayerEvents()
+    {
+        if (_mediaPlayer == null) return;
+        _mediaPlayer.Playing  += (_, _) => Application.Current?.Dispatcher.InvokeAsync(OnPlaying);
+        _mediaPlayer.Paused   += (_, _) => Application.Current?.Dispatcher.InvokeAsync(OnPaused);
+        _mediaPlayer.Stopped  += (_, _) => Application.Current?.Dispatcher.InvokeAsync(OnStopped);
+        _mediaPlayer.EndReached += (_, _) => ThreadPool.QueueUserWorkItem(_ => HandleEndReached());
+        _mediaPlayer.EncounteredError += (_, _) => Application.Current?.Dispatcher.InvokeAsync(OnError);
+    }
+
+    private void CreateLibVLC(int rotation)
+    {
+        _libVLC = new LibVLC(enableDebugLogs: false, BuildLibVlcArgs(rotation));
+        _mediaPlayer = new MediaPlayer(_libVLC);
+        _mediaPlayer.Volume = (int)_volume;
+        _mediaPlayer.Mute = _isMuted;
+        AttachMediaPlayerEvents();
+        _libVlcRotation = rotation;
+        OnPropertyChanged(nameof(MediaPlayer));
+        OnPropertyChanged(nameof(LibVLC));
+    }
+
+    private void ReinitLibVLC(int rotation)
+    {
+        _mediaPlayer?.Stop();
+        _mediaPlayer?.Dispose();
+        _libVLC?.Dispose();
+        CreateLibVLC(rotation);
+    }
+
+    private void EnsureLibVlcRotation(int rotation)
+    {
+        if (_libVlcRotation == rotation && _libVLC != null && _mediaPlayer != null) return;
+        ReinitLibVLC(rotation);
+    }
+
     private void InitLibVLC()
     {
         try
         {
             Core.Initialize();
-            _libVLC = new LibVLC(enableDebugLogs: false,
-                "--no-video-title-show",
-                "--no-osd",
-                "--verbose=0");
-            _mediaPlayer = new MediaPlayer(_libVLC);
-            _mediaPlayer.Volume = (int)_volume;
-
-            _mediaPlayer.Playing  += (_, _) => Application.Current?.Dispatcher.InvokeAsync(OnPlaying);
-            _mediaPlayer.Paused   += (_, _) => Application.Current?.Dispatcher.InvokeAsync(OnPaused);
-            _mediaPlayer.Stopped  += (_, _) => Application.Current?.Dispatcher.InvokeAsync(OnStopped);
-            _mediaPlayer.EndReached += (_, _) => ThreadPool.QueueUserWorkItem(_ => HandleEndReached());
-            _mediaPlayer.EncounteredError += (_, _) => Application.Current?.Dispatcher.InvokeAsync(OnError);
-
-            OnPropertyChanged(nameof(MediaPlayer));
-            OnPropertyChanged(nameof(LibVLC));
+            CreateLibVLC(0);
         }
         catch (Exception ex)
         {
@@ -408,13 +442,10 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         StatusText = "Đang tải...";
         CurrentFilePath = path;
 
-        var media = new Media(_libVLC, path, FromType.FromPath);
-        if (_videoRotation != 0)
-        {
-            media.AddOption(":video-filter=transform");
-            media.AddOption($":transform-type={_videoRotation}");
-        }
-        _mediaPlayer.Media = media;
+        EnsureLibVlcRotation(_videoRotation);
+
+        var media = new Media(_libVLC!, path, FromType.FromPath);
+        _mediaPlayer!.Media = media;
         _mediaPlayer.Play();
 
         HasMedia = true;
@@ -781,42 +812,40 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     private void ApplyRotation()
     {
         if (_mediaPlayer == null || !HasMedia || _isApplyingRotation) return;
+        if (_libVlcRotation == _videoRotation) return;
+
+        string? path = _currentFilePath;
+        if (string.IsNullOrEmpty(path) || !File.Exists(path)) return;
+
         try
         {
-            // LibVLC 3.x: rotation via video filter (transform). We must re-open media.
-            // Guard against re-entrant call from OnPlaying.
-            string? path = _currentFilePath;
-            if (string.IsNullOrEmpty(path) || !File.Exists(path)) return;
-
+            // LibVLC transform filter must be set at LibVLC init, not via media.AddOption.
             _isApplyingRotation = true;
 
             long savedTime = _mediaPlayer.Time;
             bool wasPlaying = _mediaPlayer.IsPlaying;
 
-            _mediaPlayer.Stop();
+            ReinitLibVLC(_videoRotation);
 
             var media = new Media(_libVLC!, path, FromType.FromPath);
-            if (_videoRotation != 0)
-            {
-                media.AddOption(":video-filter=transform");
-                media.AddOption($":transform-type={_videoRotation}");
-            }
-
-            _mediaPlayer.Media = media;
+            _mediaPlayer!.Media = media;
             _mediaPlayer.Play();
 
-            // Seek back to saved position after media starts
-            Task.Delay(500).ContinueWith(_ =>
+            Application.Current?.Dispatcher.InvokeAsync(async () =>
             {
                 try
                 {
+                    await Task.Delay(400);
+                    if (_mediaPlayer == null) return;
                     _mediaPlayer.Time = savedTime;
                     if (!wasPlaying)
                     {
-                        System.Threading.Thread.Sleep(100);
+                        await Task.Delay(100);
                         _mediaPlayer.Pause();
                     }
                     ApplyZoom();
+                    if (_playbackSpeed != 1.0)
+                        _mediaPlayer.SetRate((float)_playbackSpeed);
                 }
                 catch { }
                 finally { _isApplyingRotation = false; }
