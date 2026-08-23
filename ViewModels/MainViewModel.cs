@@ -757,7 +757,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     private void ApplyZoom()
     {
         if (_mediaPlayer == null) return;
-        try { _mediaPlayer.Video.Scale = _videoZoom; } catch { }
+        try { _mediaPlayer.Scale = _videoZoom; } catch { }
     }
 
     private void ApplyRotation()
