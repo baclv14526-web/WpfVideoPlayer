@@ -190,8 +190,17 @@ public partial class MainWindow : Window
         }
     }
 
-    // ── Speed menu popup ──────────────────────────────────────────────────────
+    // ── Speed / Zoom / Rotate menu popups ─────────────────────────────────────
     private void SpeedButton_Click(object sender, RoutedEventArgs e)
+        => OpenContextMenuTop(sender);
+
+    private void ZoomButton_Click(object sender, RoutedEventArgs e)
+        => OpenContextMenuTop(sender);
+
+    private void RotateButton_Click(object sender, RoutedEventArgs e)
+        => OpenContextMenuTop(sender);
+
+    private static void OpenContextMenuTop(object sender)
     {
         if (sender is FrameworkElement fe && fe.ContextMenu != null)
         {

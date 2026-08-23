@@ -63,6 +63,11 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     private string _currentFilePath = "";
     private int _selectedPlaylistIndex = -1;
 
+    // ── Zoom & Rotate fields ──────────────────────────────────────────────────
+    private float _videoZoom = 0f;     // 0 = Fit (auto), 0.25/0.5/1.0/1.5/2.0
+    private int   _videoRotation = 0;  // 0 / 90 / 180 / 270
+    private bool  _isApplyingRotation = false; // guard against re-entrant rotation
+
     // ── Motion Detection & Cache fields ───────────────────────────────────────
     private bool _isScanning;
     private double _scanProgress;
@@ -230,6 +235,44 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     public BitmapSource? TimelineHoverPreviewImage { get => _timelineHoverPreviewImage; set => Set(ref _timelineHoverPreviewImage, value); }
     public MotionBookmark? TimelineHoverBookmark { get => _timelineHoverBookmark; set => Set(ref _timelineHoverBookmark, value); }
 
+    // ── Zoom & Rotate properties ──────────────────────────────────────────────
+    /// <summary>0 = Fit/Auto, 0.25 = 25%, 0.5 = 50%, 1.0 = 100%, 1.5 = 150%, 2.0 = 200%</summary>
+    public float VideoZoom
+    {
+        get => _videoZoom;
+        set
+        {
+            if (Set(ref _videoZoom, value))
+            {
+                ApplyZoom();
+                OnPropertyChanged(nameof(VideoZoomText));
+                StatusText = value == 0f ? "Zoom: Fit" : $"Zoom: {(int)(value * 100)}%";
+            }
+        }
+    }
+
+    public string VideoZoomText => _videoZoom == 0f ? "Fit" : $"{(int)(_videoZoom * 100)}%";
+
+    /// <summary>Góc xoay: 0 / 90 / 180 / 270</summary>
+    public int VideoRotation
+    {
+        get => _videoRotation;
+        set
+        {
+            int normalized = ((value % 360) + 360) % 360;
+            if (normalized != 0 && normalized != 90 && normalized != 180 && normalized != 270)
+                normalized = 0;
+            if (Set(ref _videoRotation, normalized))
+            {
+                ApplyRotation();
+                OnPropertyChanged(nameof(VideoRotationText));
+                StatusText = normalized == 0 ? "Xoay: Bình thường" : $"Xoay: {normalized}°";
+            }
+        }
+    }
+
+    public string VideoRotationText => _videoRotation == 0 ? "0°" : $"{_videoRotation}°";
+
     // ── Commands ──────────────────────────────────────────────────────────────
     public ICommand PlayPauseCommand { get; }
     public ICommand StopCommand { get; }
@@ -265,6 +308,13 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     public ICommand ToggleShuffleCommand { get; set; } = new RelayCommand(() => { });
     public ICommand ToggleRepeatCommand  { get; set; } = new RelayCommand(() => { });
     public ICommand ExitFullscreenCommand { get; set; } = new RelayCommand(() => { });
+    public ICommand SetZoomCommand { get; }
+    public ICommand ZoomInCommand { get; }
+    public ICommand ZoomOutCommand { get; }
+    public ICommand FitToScreenCommand { get; }
+    public ICommand SetRotationCommand { get; }
+    public ICommand RotateCWCommand { get; }
+    public ICommand RotateCCWCommand { get; }
 
     // ── Constructor ───────────────────────────────────────────────────────────
     public MainViewModel()
@@ -304,6 +354,26 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         ClearPlaylistCommand = new RelayCommand(ClearPlaylist, () => Playlist.Count > 0);
         VolumeUpCommand      = new RelayCommand(() => Volume = Math.Min(200, Volume + 5));
         VolumeDownCommand    = new RelayCommand(() => Volume = Math.Max(0, Volume - 5));
+
+        // Zoom commands
+        SetZoomCommand    = new RelayCommand<object>(param =>
+        {
+            if (param != null && float.TryParse(param.ToString(), System.Globalization.NumberStyles.Any,
+                System.Globalization.CultureInfo.InvariantCulture, out float z))
+                VideoZoom = z;
+        });
+        FitToScreenCommand = new RelayCommand(() => VideoZoom = 0f);
+        ZoomInCommand     = new RelayCommand(ZoomIn, () => HasMedia);
+        ZoomOutCommand    = new RelayCommand(ZoomOut, () => HasMedia);
+
+        // Rotate commands
+        SetRotationCommand = new RelayCommand<object>(param =>
+        {
+            if (param != null && int.TryParse(param.ToString(), out int deg))
+                VideoRotation = deg;
+        });
+        RotateCWCommand  = new RelayCommand(() => VideoRotation = (_videoRotation + 90) % 360, () => HasMedia);
+        RotateCCWCommand = new RelayCommand(() => VideoRotation = (_videoRotation + 270) % 360, () => HasMedia);
 
         _uiTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(300) };
         _uiTimer.Tick += OnUiTimer;
@@ -594,6 +664,9 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         VideoInfo = GetVideoInfo();
         if (_playbackSpeed != 1.0 && _mediaPlayer != null)
             _mediaPlayer.SetRate((float)_playbackSpeed);
+        // Only apply zoom here; rotation is handled via replay so no loop needed
+        if (!_isApplyingRotation)
+            ApplyZoom();
     }
 
     private void OnPaused()
@@ -671,6 +744,96 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         IsLoading = false;
         IsPlaying = false;
         StatusText = "Lỗi phát video – định dạng không được hỗ trợ hoặc file bị hỏng";
+    }
+
+    // ── Zoom & Rotate helpers ─────────────────────────────────────────────────
+    private static readonly float[] ZoomLevels = { 0f, 0.25f, 0.5f, 1.0f, 1.5f, 2.0f };
+
+    private void ApplyZoom()
+    {
+        if (_mediaPlayer == null) return;
+        try { _mediaPlayer.Video.Scale = _videoZoom; } catch { }
+    }
+
+    private void ApplyRotation()
+    {
+        if (_mediaPlayer == null || !HasMedia || _isApplyingRotation) return;
+        try
+        {
+            // LibVLC 3.x: rotation via video filter (transform). We must re-open media.
+            // Guard against re-entrant call from OnPlaying.
+            string? path = _currentFilePath;
+            if (string.IsNullOrEmpty(path) || !File.Exists(path)) return;
+
+            _isApplyingRotation = true;
+
+            long savedTime = _mediaPlayer.Time;
+            bool wasPlaying = _mediaPlayer.IsPlaying;
+
+            _mediaPlayer.Stop();
+
+            var media = new Media(_libVLC!, path, FromType.FromPath);
+            if (_videoRotation != 0)
+                media.AddOption($":video-filter=transform:transform-type={_videoRotation}");
+
+            _mediaPlayer.Media = media;
+            _mediaPlayer.Play();
+
+            // Seek back to saved position after media starts
+            Task.Delay(500).ContinueWith(_ =>
+            {
+                try
+                {
+                    _mediaPlayer.Time = savedTime;
+                    if (!wasPlaying)
+                    {
+                        System.Threading.Thread.Sleep(100);
+                        _mediaPlayer.Pause();
+                    }
+                    ApplyZoom();
+                }
+                catch { }
+                finally { _isApplyingRotation = false; }
+            });
+        }
+        catch { _isApplyingRotation = false; }
+    }
+
+    private void ZoomIn()
+    {
+        // Skip the "Fit" (0f) level when zooming in from any zoom
+        var levels = ZoomLevels.Where(z => z > 0).ToArray();
+        if (_videoZoom <= 0f)
+        {
+            VideoZoom = levels.FirstOrDefault(z => z >= 1.0f, 1.0f);
+            return;
+        }
+        int idx = Array.FindIndex(levels, z => Math.Abs(z - _videoZoom) < 0.01f);
+        if (idx >= 0 && idx < levels.Length - 1)
+            VideoZoom = levels[idx + 1];
+        else if (idx == -1)
+        {
+            var next = levels.FirstOrDefault(z => z > _videoZoom);
+            if (next > 0) VideoZoom = next;
+        }
+    }
+
+    private void ZoomOut()
+    {
+        var levels = ZoomLevels.Where(z => z > 0).ToArray();
+        if (_videoZoom <= 0f || Math.Abs(_videoZoom - levels[0]) < 0.01f)
+        {
+            VideoZoom = 0f; // already at minimum – go to Fit
+            return;
+        }
+        int idx = Array.FindIndex(levels, z => Math.Abs(z - _videoZoom) < 0.01f);
+        if (idx > 0)
+            VideoZoom = levels[idx - 1];
+        else if (idx == -1)
+        {
+            var prev = levels.LastOrDefault(z => z < _videoZoom);
+            VideoZoom = prev > 0 ? prev : 0f;
+        }
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────

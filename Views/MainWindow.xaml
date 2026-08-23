@@ -45,6 +45,13 @@
         <KeyBinding Key="OemCloseBrackets" Command="{Binding SpeedUpCommand}"/>
         <KeyBinding Key="Escape" Command="{Binding ExitFullscreenCommand}"/>
         <KeyBinding Key="O" Modifiers="Ctrl" Command="{Binding OpenFileCommand}"/>
+        <!-- Zoom: Ctrl+= ZoomIn, Ctrl+- ZoomOut, Ctrl+0 Fit -->
+        <KeyBinding Key="OemPlus" Modifiers="Ctrl" Command="{Binding ZoomInCommand}"/>
+        <KeyBinding Key="OemMinus" Modifiers="Ctrl" Command="{Binding ZoomOutCommand}"/>
+        <KeyBinding Key="D0" Modifiers="Ctrl" Command="{Binding FitToScreenCommand}"/>
+        <!-- Rotate: Ctrl+R CW, Ctrl+Shift+R CCW -->
+        <KeyBinding Key="R" Modifiers="Ctrl" Command="{Binding RotateCWCommand}"/>
+        <KeyBinding Key="R" Modifiers="Ctrl,Shift" Command="{Binding RotateCCWCommand}"/>
     </Window.InputBindings>
 
     <Grid>
@@ -817,6 +824,60 @@
                                                 Content="{StaticResource IconSpeed}"
                                                 Width="12" Height="12" Margin="0,0,4,0"/>
                                 <TextBlock Text="{Binding PlaybackSpeedText}" FontSize="11" FontWeight="SemiBold"
+                                           Foreground="{StaticResource BrushTextPrimary}" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
+
+                        <!-- ── ZOOM button ──────────────────────────────────── -->
+                        <Button Style="{StaticResource SpeedButtonStyle}"
+                                ToolTip="Zoom video (Ctrl+= / Ctrl+-/ Ctrl+0=Fit)"
+                                Click="ZoomButton_Click"
+                                Margin="0,0,4,0">
+                            <Button.ContextMenu>
+                                <ContextMenu>
+                                    <MenuItem Header="── ZOOM VIDEO ──" IsEnabled="False" Foreground="{StaticResource BrushTextSecondary}" FontSize="10"/>
+                                    <MenuItem Header="Fit màn hình (Ctrl+0)"
+                                              Command="{Binding FitToScreenCommand}"
+                                              FontWeight="SemiBold"/>
+                                    <Separator/>
+                                    <MenuItem Header="25%" Command="{Binding SetZoomCommand}" CommandParameter="0.25"/>
+                                    <MenuItem Header="50%" Command="{Binding SetZoomCommand}" CommandParameter="0.5"/>
+                                    <MenuItem Header="100%" Command="{Binding SetZoomCommand}" CommandParameter="1.0" FontWeight="SemiBold"/>
+                                    <MenuItem Header="150%" Command="{Binding SetZoomCommand}" CommandParameter="1.5"/>
+                                    <MenuItem Header="200%" Command="{Binding SetZoomCommand}" CommandParameter="2.0"/>
+                                </ContextMenu>
+                            </Button.ContextMenu>
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <ContentControl Style="{StaticResource VectorIconAccent}"
+                                                Content="{StaticResource IconZoom}"
+                                                Width="13" Height="13" Margin="0,0,4,0"/>
+                                <TextBlock Text="{Binding VideoZoomText}" FontSize="11" FontWeight="SemiBold"
+                                           Foreground="{StaticResource BrushTextPrimary}" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
+
+                        <!-- ── ROTATE button ────────────────────────────────── -->
+                        <Button Style="{StaticResource SpeedButtonStyle}"
+                                ToolTip="Xoay video (Ctrl+R: CW | Ctrl+Shift+R: CCW)"
+                                Click="RotateButton_Click"
+                                Margin="0,0,6,0">
+                            <Button.ContextMenu>
+                                <ContextMenu>
+                                    <MenuItem Header="── XOAY VIDEO ──" IsEnabled="False" Foreground="{StaticResource BrushTextSecondary}" FontSize="10"/>
+                                    <MenuItem Header="0° – Bình thường" Command="{Binding SetRotationCommand}" CommandParameter="0" FontWeight="SemiBold"/>
+                                    <MenuItem Header="90° – Xoay phải (CW)" Command="{Binding SetRotationCommand}" CommandParameter="90"/>
+                                    <MenuItem Header="180° – Lật ngược" Command="{Binding SetRotationCommand}" CommandParameter="180"/>
+                                    <MenuItem Header="270° – Xoay trái (CCW)" Command="{Binding SetRotationCommand}" CommandParameter="270"/>
+                                    <Separator/>
+                                    <MenuItem Header="⟳ Xoay phải 90° (Ctrl+R)" Command="{Binding RotateCWCommand}"/>
+                                    <MenuItem Header="⟲ Xoay trái 90° (Ctrl+Shift+R)" Command="{Binding RotateCCWCommand}"/>
+                                </ContextMenu>
+                            </Button.ContextMenu>
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <ContentControl Style="{StaticResource VectorIconAccent}"
+                                                Content="{StaticResource IconRotate}"
+                                                Width="13" Height="13" Margin="0,0,4,0"/>
+                                <TextBlock Text="{Binding VideoRotationText}" FontSize="11" FontWeight="SemiBold"
                                            Foreground="{StaticResource BrushTextPrimary}" VerticalAlignment="Center"/>
                             </StackPanel>
                         </Button>
