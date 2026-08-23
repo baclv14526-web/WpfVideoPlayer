@@ -784,7 +784,7 @@
                                 Margin="0,0,6,0">
 
                             <Button.ContextMenu>
-                                <ContextMenu>
+                                <ContextMenu DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
                                     <MenuItem Header="── CHẾ ĐỘ PHÁT THÔNG MINH ──" IsEnabled="False" Foreground="{StaticResource BrushTextSecondary}" FontSize="10"/>
                                     <MenuItem Header="Lx: Tuyến tính 1x → 4x"
                                               Command="{Binding ToggleLxModeCommand}"
@@ -830,11 +830,11 @@
 
                         <!-- ── ZOOM button ──────────────────────────────────── -->
                         <Button Style="{StaticResource SpeedButtonStyle}"
-                                ToolTip="Zoom video (Ctrl+= / Ctrl+-/ Ctrl+0=Fit)"
+                                ToolTip="Zoom video: 25%/50%/100%/150%/200%/Fit (Ctrl+= / Ctrl+- / Ctrl+0)"
                                 Click="ZoomButton_Click"
                                 Margin="0,0,4,0">
                             <Button.ContextMenu>
-                                <ContextMenu>
+                                <ContextMenu DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
                                     <MenuItem Header="── ZOOM VIDEO ──" IsEnabled="False" Foreground="{StaticResource BrushTextSecondary}" FontSize="10"/>
                                     <MenuItem Header="Fit màn hình (Ctrl+0)"
                                               Command="{Binding FitToScreenCommand}"
@@ -858,19 +858,20 @@
 
                         <!-- ── ROTATE button ────────────────────────────────── -->
                         <Button Style="{StaticResource SpeedButtonStyle}"
-                                ToolTip="Xoay video (Ctrl+R: CW | Ctrl+Shift+R: CCW)"
+                                ToolTip="Xoay video: 90°/180°/270°/360° (Ctrl+R: Xoay phải | Ctrl+Shift+R: Xoay trái)"
                                 Click="RotateButton_Click"
                                 Margin="0,0,6,0">
                             <Button.ContextMenu>
-                                <ContextMenu>
+                                <ContextMenu DataContext="{Binding PlacementTarget.DataContext, RelativeSource={RelativeSource Self}}">
                                     <MenuItem Header="── XOAY VIDEO ──" IsEnabled="False" Foreground="{StaticResource BrushTextSecondary}" FontSize="10"/>
-                                    <MenuItem Header="0° – Bình thường" Command="{Binding SetRotationCommand}" CommandParameter="0" FontWeight="SemiBold"/>
-                                    <MenuItem Header="90° – Xoay phải (CW)" Command="{Binding SetRotationCommand}" CommandParameter="90"/>
-                                    <MenuItem Header="180° – Lật ngược" Command="{Binding SetRotationCommand}" CommandParameter="180"/>
-                                    <MenuItem Header="270° – Xoay trái (CCW)" Command="{Binding SetRotationCommand}" CommandParameter="270"/>
+                                    <MenuItem Header="0° / 360° – Chuẩn (Bình thường)" Command="{Binding SetRotationCommand}" CommandParameter="0" FontWeight="SemiBold"/>
+                                    <MenuItem Header="90° – Xoay phải 90° (CW)" Command="{Binding SetRotationCommand}" CommandParameter="90"/>
+                                    <MenuItem Header="180° – Xoay lật 180°" Command="{Binding SetRotationCommand}" CommandParameter="180"/>
+                                    <MenuItem Header="270° – Xoay trái 90° / 270°" Command="{Binding SetRotationCommand}" CommandParameter="270"/>
+                                    <MenuItem Header="360° – Về lại 360° (0°)" Command="{Binding SetRotationCommand}" CommandParameter="0"/>
                                     <Separator/>
-                                    <MenuItem Header="⟳ Xoay phải 90° (Ctrl+R)" Command="{Binding RotateCWCommand}"/>
-                                    <MenuItem Header="⟲ Xoay trái 90° (Ctrl+Shift+R)" Command="{Binding RotateCCWCommand}"/>
+                                    <MenuItem Header="⟳ Xoay tiếp 90° (Ctrl+R)" Command="{Binding RotateCWCommand}"/>
+                                    <MenuItem Header="⟲ Xoay ngược 90° (Ctrl+Shift+R)" Command="{Binding RotateCCWCommand}"/>
                                 </ContextMenu>
                             </Button.ContextMenu>
                             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">

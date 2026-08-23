@@ -420,6 +420,11 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         CurrentFilePath = path;
 
         var media = new Media(_libVLC, path, FromType.FromPath);
+        if (_videoRotation != 0)
+        {
+            media.AddOption(":video-filter=transform");
+            media.AddOption($":transform-type={_videoRotation}");
+        }
         _mediaPlayer.Media = media;
         _mediaPlayer.Play();
 
@@ -774,7 +779,10 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
 
             var media = new Media(_libVLC!, path, FromType.FromPath);
             if (_videoRotation != 0)
-                media.AddOption($":video-filter=transform:transform-type={_videoRotation}");
+            {
+                media.AddOption(":video-filter=transform");
+                media.AddOption($":transform-type={_videoRotation}");
+            }
 
             _mediaPlayer.Media = media;
             _mediaPlayer.Play();
