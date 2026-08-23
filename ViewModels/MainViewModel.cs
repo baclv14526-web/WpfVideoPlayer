@@ -107,8 +107,8 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
                     // Khi tắt Lx, reset về 1x
                     _playbackSpeed = 1.0;
                     _mediaPlayer?.SetRate(1.0f);
-                    OnPropertyChanged(nameof(PlaybackSpeedText));
                 }
+                OnPropertyChanged(nameof(PlaybackSpeedText));
                 StatusText = value ? "Chế độ Lx: tăng tốc tuyến tính 1x→4x" : "Tốc độ: 1x";
             }
         }
@@ -123,6 +123,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
             {
                 if (value) BeginPsMode();
                 else       StopPsMode();
+                OnPropertyChanged(nameof(PlaybackSpeedText));
             }
         }
     }
@@ -136,6 +137,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
             {
                 if (value) BeginPbMode();
                 else       StopPbMode();
+                OnPropertyChanged(nameof(PlaybackSpeedText));
             }
         }
     }
@@ -162,7 +164,16 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         }
     }
 
-    public string PlaybackSpeedText => $"{_playbackSpeed:0.##}x";
+    public string PlaybackSpeedText
+    {
+        get
+        {
+            if (_isLxMode) return "Lx";
+            if (_isPsMode) return "Ps";
+            if (_isPbMode) return "Pb";
+            return $"{_playbackSpeed:0.##}x";
+        }
+    }
 
     public double Volume
     {
@@ -402,6 +413,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         if (_isLxMode) IsLxMode = false;
         if (_isPsMode) StopPsMode(silent: true);
         if (_isPbMode) StopPbMode(silent: true);
+        if (_playbackSpeed >= 16.0) PlaybackSpeed = 1.0;
         _mediaPlayer?.Stop();
         _uiTimer.Stop();
         Position = 0;
@@ -616,6 +628,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
                 _isLxMode = false;
                 OnPropertyChanged(nameof(IsLxMode));
                 _playbackSpeed = 1.0;
+                _mediaPlayer?.SetRate(1.0f);
                 OnPropertyChanged(nameof(PlaybackSpeedText));
             }
 
@@ -624,6 +637,12 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
 
             // Tắt Pb mode khi video kết thúc
             if (_isPbMode) StopPbMode(silent: true);
+
+            // Reset các tốc độ siêu nhanh (16x, 32x, 64x) về chuẩn 1x
+            if (_playbackSpeed >= 16.0)
+            {
+                PlaybackSpeed = 1.0;
+            }
 
             if (IsRepeat)
             {

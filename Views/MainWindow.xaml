@@ -601,11 +601,18 @@
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
 
-                        <!-- Floating Timeline Hover Preview (Windows Media Player style) -->
-                        <Canvas Height="0" ClipToBounds="False" IsHitTestVisible="False" VerticalAlignment="Top" Margin="0,-140,0,0"
-                                Visibility="{Binding IsTimelineHoverPreviewVisible, Converter={StaticResource BoolToVis}}">
-                            <Border Canvas.Left="{Binding TimelineHoverLeft}"
-                                    Width="194" Height="136" CornerRadius="8"
+                        <!-- Floating Timeline Hover Preview (Popup overcomes Win32 VideoView Airspace) -->
+                        <Popup x:Name="TimelinePreviewPopup"
+                               PlacementTarget="{Binding ElementName=MainSeekSlider}"
+                               Placement="Top"
+                               HorizontalOffset="{Binding TimelineHoverLeft}"
+                               VerticalOffset="-10"
+                               IsOpen="{Binding IsTimelineHoverPreviewVisible}"
+                               AllowsTransparency="True"
+                               Focusable="False"
+                               IsHitTestVisible="False"
+                               PopupAnimation="Fade">
+                            <Border Width="194" Height="136" CornerRadius="8"
                                     Background="#14141F" BorderBrush="{StaticResource BrushAccentLight}" BorderThickness="1.5"
                                     Padding="4">
                                 <Border.Effect>
@@ -640,7 +647,7 @@
                                     </Border>
                                 </Grid>
                             </Border>
-                        </Canvas>
+                        </Popup>
                     </Grid>
 
                     <TextBlock Grid.Column="2" Text="{Binding TotalTimeText}" FontSize="11" FontFamily="Consolas"
@@ -761,40 +768,31 @@
                         <TextBlock Text="{Binding StatusText}" FontSize="11"
                                    Foreground="{StaticResource BrushTextSecondary}"
                                    VerticalAlignment="Center" Margin="0,0,10,0"
-                                   MaxWidth="130" TextTrimming="CharacterEllipsis"/>
+                                   MaxWidth="140" TextTrimming="CharacterEllipsis"/>
 
-                        <!-- Lx mode toggle button -->
-                        <Button Style="{StaticResource LxButtonStyle}"
-                                Command="{Binding ToggleLxModeCommand}"
-                                ToolTip="Chế độ Lx: tăng tốc tuyến tính từ 1x → 4x trong suốt video"
-                                Margin="0,0,4,0" Padding="8,4">
-                            <TextBlock Text="Lx" FontSize="11" FontWeight="Bold" VerticalAlignment="Center"/>
-                        </Button>
-
-                        <!-- Ps mode toggle button -->
-                        <Button Style="{StaticResource PsButtonStyle}"
-                                Command="{Binding TogglePsModeCommand}"
-                                ToolTip="Chế độ Ps: Play Step – 30s @2x, sau đó nhảy ngẫu nhiên 3-5 điểm (cách nhau ≥30s), mỗi điểm phát 30s @2x"
-                                Margin="0,0,4,0" Padding="8,4">
-                            <TextBlock Text="Ps" FontSize="11" FontWeight="Bold" VerticalAlignment="Center"/>
-                        </Button>
-
-                        <!-- Pb mode toggle button -->
-                        <Button Style="{StaticResource PbButtonStyle}"
-                                Command="{Binding TogglePbModeCommand}"
-                                ToolTip="Chế độ Pb: Play Balanced – 30s @2x, sau đó nhảy chia đều theo độ dài video (&lt;3p: 1 điểm, 3-20p: 5 điểm, &gt;20p: 10 điểm), mỗi điểm phát 30s @2x"
-                                Margin="0,0,4,0" Padding="8,4">
-                            <TextBlock Text="Pb" FontSize="11" FontWeight="Bold" VerticalAlignment="Center"/>
-                        </Button>
-
-                        <!-- Speed selector button -->
+                        <!-- Speed & Mode selector button (Consolidated) -->
                         <Button Style="{StaticResource SpeedButtonStyle}"
-                                ToolTip="Tốc độ phát (Click để chọn, phím [ / ])"
+                                ToolTip="Tốc độ &amp; Chế độ phát thông minh Lx/Ps/Pb (Click để chọn, phím [ / ])"
                                 Click="SpeedButton_Click"
                                 Margin="0,0,6,0">
 
                             <Button.ContextMenu>
                                 <ContextMenu>
+                                    <MenuItem Header="── CHẾ ĐỘ PHÁT THÔNG MINH ──" IsEnabled="False" Foreground="{StaticResource BrushTextSecondary}" FontSize="10"/>
+                                    <MenuItem Header="Lx: Tuyến tính 1x → 4x"
+                                              Command="{Binding ToggleLxModeCommand}"
+                                              IsChecked="{Binding IsLxMode, Mode=OneWay}"
+                                              ToolTip="Tăng tốc tuyến tính từ 1x đến 4x theo tiến trình video"/>
+                                    <MenuItem Header="Ps: Play Step (30s @2x ngẫu nhiên)"
+                                              Command="{Binding TogglePsModeCommand}"
+                                              IsChecked="{Binding IsPsMode, Mode=OneWay}"
+                                              ToolTip="Intro 30s @2x, sau đó nhảy ngẫu nhiên 3-5 điểm phát 30s @2x"/>
+                                    <MenuItem Header="Pb: Play Balanced (30s @2x chia đều)"
+                                              Command="{Binding TogglePbModeCommand}"
+                                              IsChecked="{Binding IsPbMode, Mode=OneWay}"
+                                              ToolTip="Intro 30s @2x, sau đó nhảy chia đều theo độ dài video phát 30s @2x"/>
+                                    <Separator/>
+                                    <MenuItem Header="── TỐC ĐỘ CỐ ĐỊNH ──" IsEnabled="False" Foreground="{StaticResource BrushTextSecondary}" FontSize="10"/>
                                     <MenuItem Header="0.25x" Command="{Binding SetSpeedCommand}" CommandParameter="0.25"/>
                                     <MenuItem Header="0.5x"  Command="{Binding SetSpeedCommand}" CommandParameter="0.5"/>
                                     <MenuItem Header="0.75x" Command="{Binding SetSpeedCommand}" CommandParameter="0.75"/>

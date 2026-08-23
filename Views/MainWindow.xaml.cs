@@ -155,6 +155,11 @@ public partial class MainWindow : Window
             var pos = e.GetPosition(fe);
             double norm = Math.Clamp(pos.X / fe.ActualWidth, 0.0, 1.0);
             _vm.UpdateTimelineHover(norm, fe.ActualWidth);
+
+            if (TimelinePreviewPopup != null)
+            {
+                TimelinePreviewPopup.HorizontalOffset = _vm.TimelineHoverLeft;
+            }
         }
     }
 
