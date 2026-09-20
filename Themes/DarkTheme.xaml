@@ -11,8 +11,9 @@
     <Color x:Key="TextPrimary">#F0F0F5</Color>
     <Color x:Key="TextSecondary">#8888A0</Color>
     <Color x:Key="BorderColor">#2A2A35</Color>
-    <Color x:Key="SeekBarBg">#2A2A35</Color>
-    <Color x:Key="SeekBarFill">#6C63FF</Color>
+    <Color x:Key="SeekBarBg">#525268</Color>
+    <Color x:Key="SeekBarFill">#7C73FF</Color>
+    <Color x:Key="SeekBarFillBright">#A59DFE</Color>
 
     <SolidColorBrush x:Key="BrushBgDeep" Color="{StaticResource BgDeep}"/>
     <SolidColorBrush x:Key="BrushBgPanel" Color="{StaticResource BgPanel}"/>
@@ -25,6 +26,7 @@
     <SolidColorBrush x:Key="BrushBorder" Color="{StaticResource BorderColor}"/>
     <SolidColorBrush x:Key="BrushSeekBarBg" Color="{StaticResource SeekBarBg}"/>
     <SolidColorBrush x:Key="BrushSeekBarFill" Color="{StaticResource SeekBarFill}"/>
+    <SolidColorBrush x:Key="BrushSeekBarFillBright" Color="{StaticResource SeekBarFillBright}"/>
     <SolidColorBrush x:Key="BrushTransparent" Color="Transparent"/>
 
     <!-- Icon Button Style -->
@@ -85,20 +87,29 @@
         </Setter>
     </Style>
 
-    <!-- Modern Seek Bar Style -->
+    <!-- Modern Seek Bar Style - Always Bright & Clear -->
     <Style x:Key="SeekBarStyle" TargetType="Slider">
         <Setter Property="Focusable" Value="False"/>
-        <Setter Property="MinHeight" Value="20"/>
+        <Setter Property="MinHeight" Value="24"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="IsMoveToPointEnabled" Value="True"/>
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="Slider">
-                    <Grid Background="Transparent">
+                    <Grid Background="Transparent" VerticalAlignment="Center">
                         <Track x:Name="PART_Track" VerticalAlignment="Center">
                             <Track.DecreaseRepeatButton>
                                 <RepeatButton x:Name="PART_SelectionRange" Command="Slider.DecreaseLarge">
                                     <RepeatButton.Template>
                                         <ControlTemplate TargetType="RepeatButton">
-                                            <Border Height="5" Background="{StaticResource BrushAccentLight}" CornerRadius="2.5"/>
+                                            <Border Height="6" CornerRadius="3">
+                                                <Border.Background>
+                                                    <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
+                                                        <GradientStop Color="#6C63FF" Offset="0"/>
+                                                        <GradientStop Color="#A29BFE" Offset="1"/>
+                                                    </LinearGradientBrush>
+                                                </Border.Background>
+                                            </Border>
                                         </ControlTemplate>
                                     </RepeatButton.Template>
                                 </RepeatButton>
@@ -107,23 +118,36 @@
                                 <RepeatButton Command="Slider.IncreaseLarge">
                                     <RepeatButton.Template>
                                         <ControlTemplate TargetType="RepeatButton">
-                                            <Border Height="5" Background="{StaticResource BrushSeekBarBg}" CornerRadius="2.5"/>
+                                            <Border Height="6" Background="{StaticResource BrushSeekBarBg}" CornerRadius="3"
+                                                    BorderBrush="#686884" BorderThickness="0.5"/>
                                         </ControlTemplate>
                                     </RepeatButton.Template>
                                 </RepeatButton>
                             </Track.IncreaseRepeatButton>
                             <Track.Thumb>
-                                <Thumb x:Name="Thumb">
+                                <Thumb x:Name="Thumb" Cursor="Hand">
                                     <Thumb.Template>
                                         <ControlTemplate TargetType="Thumb">
-                                            <Ellipse x:Name="thumb" Width="14" Height="14"
-                                                     Fill="{StaticResource BrushTextPrimary}"
-                                                     Stroke="{StaticResource BrushAccent}"
-                                                     StrokeThickness="2"/>
+                                            <Grid>
+                                                <Ellipse x:Name="thumbGlow" Width="22" Height="22" Fill="#406C63FF"
+                                                         HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                         Opacity="0"/>
+                                                <Ellipse x:Name="thumb" Width="14" Height="14"
+                                                         Fill="#FFFFFF"
+                                                         Stroke="#6C63FF"
+                                                         StrokeThickness="2.5"
+                                                         HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                            </Grid>
                                             <ControlTemplate.Triggers>
                                                 <Trigger Property="IsMouseOver" Value="True">
                                                     <Setter TargetName="thumb" Property="Width" Value="16"/>
                                                     <Setter TargetName="thumb" Property="Height" Value="16"/>
+                                                    <Setter TargetName="thumbGlow" Property="Opacity" Value="1"/>
+                                                </Trigger>
+                                                <Trigger Property="IsDragging" Value="True">
+                                                    <Setter TargetName="thumb" Property="Width" Value="17"/>
+                                                    <Setter TargetName="thumb" Property="Height" Value="17"/>
+                                                    <Setter TargetName="thumbGlow" Property="Opacity" Value="1"/>
                                                 </Trigger>
                                             </ControlTemplate.Triggers>
                                         </ControlTemplate>

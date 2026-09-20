@@ -142,11 +142,27 @@ public partial class MainWindow : Window
     }
 
     // ── Seek bar mouse handling ───────────────────────────────────────────────
-    private void SeekBar_PreviewMouseDown(object sender, MouseButtonEventArgs e)
-        => _vm.SeekStartCommand.Execute(null);
+    private bool _isDraggingSeek;
 
-    private void SeekBar_PreviewMouseUp(object sender, MouseButtonEventArgs e)
-        => _vm.SeekEndCommand.Execute(null);
+    private void SeekBarContainer_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (!_vm.HasMedia || sender is not FrameworkElement fe || fe.ActualWidth <= 0) return;
+
+        // If clicking on bookmark pin button, let the bookmark handle it
+        if (e.OriginalSource is DependencyObject dep && FindVisualParent<System.Windows.Controls.Button>(dep) is { } btn && btn != sender)
+        {
+            return;
+        }
+
+        _isDraggingSeek = true;
+        fe.CaptureMouse();
+        _vm.SeekStartCommand.Execute(null);
+
+        var pos = e.GetPosition(fe);
+        double norm = Math.Clamp(pos.X / fe.ActualWidth, 0.0, 1.0);
+        _vm.SeekToNormalized(norm);
+        e.Handled = true;
+    }
 
     private void SeekBar_PreviewMouseMove(object sender, MouseEventArgs e)
     {
@@ -154,6 +170,12 @@ public partial class MainWindow : Window
         {
             var pos = e.GetPosition(fe);
             double norm = Math.Clamp(pos.X / fe.ActualWidth, 0.0, 1.0);
+
+            if (_isDraggingSeek && e.LeftButton == MouseButtonState.Pressed)
+            {
+                _vm.SeekToNormalized(norm);
+            }
+
             _vm.UpdateTimelineHover(norm, fe.ActualWidth);
 
             if (TimelinePreviewPopup != null)
@@ -163,9 +185,39 @@ public partial class MainWindow : Window
         }
     }
 
+    private void SeekBarContainer_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        if (_isDraggingSeek)
+        {
+            _isDraggingSeek = false;
+            if (sender is FrameworkElement fe)
+            {
+                fe.ReleaseMouseCapture();
+                var pos = e.GetPosition(fe);
+                double norm = Math.Clamp(pos.X / fe.ActualWidth, 0.0, 1.0);
+                _vm.SeekToNormalized(norm);
+            }
+            _vm.SeekEndCommand.Execute(null);
+            e.Handled = true;
+        }
+    }
+
     private void SeekBar_MouseLeave(object sender, MouseEventArgs e)
     {
-        _vm.HideTimelineHover();
+        if (!_isDraggingSeek)
+        {
+            _vm.HideTimelineHover();
+        }
+    }
+
+    private static T? FindVisualParent<T>(DependencyObject? child) where T : DependencyObject
+    {
+        while (child != null)
+        {
+            if (child is T parent) return parent;
+            child = System.Windows.Media.VisualTreeHelper.GetParent(child);
+        }
+        return null;
     }
 
     // ── Drag & Drop ───────────────────────────────────────────────────────────

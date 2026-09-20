@@ -52,6 +52,9 @@
         <!-- Rotate: Ctrl+R CW, Ctrl+Shift+R CCW -->
         <KeyBinding Key="R" Modifiers="Ctrl" Command="{Binding RotateCWCommand}"/>
         <KeyBinding Key="R" Modifiers="Ctrl+Shift" Command="{Binding RotateCCWCommand}"/>
+        <!-- Snapshot / Chụp ảnh: S / Ctrl+S -->
+        <KeyBinding Key="S" Command="{Binding TakeSnapshotCommand}"/>
+        <KeyBinding Key="S" Modifiers="Ctrl" Command="{Binding TakeSnapshotCommand}"/>
     </Window.InputBindings>
 
     <Grid>
@@ -523,7 +526,9 @@
                     <Grid Grid.Column="1" VerticalAlignment="Center"
                           x:Name="SeekBarContainer"
                           Background="Transparent"
+                          PreviewMouseLeftButtonDown="SeekBarContainer_PreviewMouseLeftButtonDown"
                           PreviewMouseMove="SeekBar_PreviewMouseMove"
+                          PreviewMouseLeftButtonUp="SeekBarContainer_PreviewMouseLeftButtonUp"
                           MouseLeave="SeekBar_MouseLeave">
                         <!-- Main Seek Slider -->
                         <Slider Style="{StaticResource SeekBarStyle}"
@@ -531,8 +536,7 @@
                                 Minimum="0" Maximum="1" Value="{Binding Position, Mode=TwoWay}"
                                 VerticalAlignment="Center"
                                 IsEnabled="{Binding HasMedia}"
-                                MouseLeftButtonDown="SeekBar_PreviewMouseDown"
-                                PreviewMouseLeftButtonUp="SeekBar_PreviewMouseUp"/>
+                                IsMoveToPointEnabled="True"/>
 
                         <!-- Bookmarks Pins Overlay with Rich Preview Tooltips -->
                         <ItemsControl ItemsSource="{Binding Bookmarks}"
@@ -719,6 +723,13 @@
                                 Command="{Binding PreviousCommand}" ToolTip="Video trước">
                             <ContentControl Style="{StaticResource VectorIcon}"
                                             Content="{StaticResource IconPrevious}"
+                                            Width="20" Height="20"/>
+                        </Button>
+                        <!-- Snapshot (Chụp ảnh video) - Left of Play button -->
+                        <Button Style="{StaticResource IconButtonStyle}" Padding="8" Margin="2,0"
+                                Command="{Binding TakeSnapshotCommand}" ToolTip="Chụp ảnh video (S / Ctrl+S)">
+                            <ContentControl Style="{StaticResource VectorIcon}"
+                                            Content="{StaticResource IconCamera}"
                                             Width="20" Height="20"/>
                         </Button>
                         <!-- Play/Pause - prominent -->

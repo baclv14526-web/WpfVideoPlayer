@@ -305,6 +305,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     public ICommand SetRotationCommand { get; }
     public ICommand RotateCWCommand { get; }
     public ICommand RotateCCWCommand { get; }
+    public ICommand TakeSnapshotCommand { get; }
 
     // ── Constructor ───────────────────────────────────────────────────────────
     public MainViewModel()
@@ -365,6 +366,9 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         RotateCWCommand  = new RelayCommand(() => VideoRotation = (_videoRotation + 90) % 360, () => HasMedia);
         RotateCCWCommand = new RelayCommand(() => VideoRotation = (_videoRotation + 270) % 360, () => HasMedia);
 
+        // Snapshot command
+        TakeSnapshotCommand = new RelayCommand(TakeSnapshot, () => HasMedia);
+
         _uiTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(300) };
         _uiTimer.Tick += OnUiTimer;
 
@@ -377,6 +381,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         var args = new List<string> { "--no-video-title-show", "--no-osd", "--verbose=0" };
         if (rotation != 0)
         {
+            args.Add("--avcodec-hw=none");
             args.Add("--video-filter=transform");
             args.Add($"--transform-type={rotation}");
         }
@@ -445,6 +450,12 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         EnsureLibVlcRotation(_videoRotation);
 
         var media = new Media(_libVLC!, path, FromType.FromPath);
+        if (_videoRotation != 0)
+        {
+            media.AddOption(":avcodec-hw=none");
+            media.AddOption(":video-filter=transform");
+            media.AddOption($":transform-type={_videoRotation}");
+        }
         _mediaPlayer!.Media = media;
         _mediaPlayer.Play();
 
@@ -619,11 +630,23 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     }
 
     // ── Seek ──────────────────────────────────────────────────────────────────
+    public void SeekToNormalized(double norm)
+    {
+        if (_mediaPlayer == null || _duration <= 0) return;
+        _position = Math.Clamp(norm, 0.0, 1.0);
+        OnPropertyChanged(nameof(Position));
+        CurrentTimeText = FormatTime((long)(_position * _duration));
+        _mediaPlayer.Time = (long)(_position * _duration * 1000);
+    }
+
     private void SeekEnd()
     {
         _isSliderBeingDragged = false;
         if (_mediaPlayer != null && _duration > 0)
+        {
             _mediaPlayer.Time = (long)(_position * _duration * 1000);
+            CurrentTimeText = FormatTime((long)(_position * _duration));
+        }
     }
 
     // ── UI Timer ──────────────────────────────────────────────────────────────
@@ -819,7 +842,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
 
         try
         {
-            // LibVLC transform filter must be set at LibVLC init, not via media.AddOption.
+            // LibVLC transform filter requires software decode + transform args.
             _isApplyingRotation = true;
 
             long savedTime = _mediaPlayer.Time;
@@ -828,6 +851,12 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
             ReinitLibVLC(_videoRotation);
 
             var media = new Media(_libVLC!, path, FromType.FromPath);
+            if (_videoRotation != 0)
+            {
+                media.AddOption(":avcodec-hw=none");
+                media.AddOption(":video-filter=transform");
+                media.AddOption($":transform-type={_videoRotation}");
+            }
             _mediaPlayer!.Media = media;
             _mediaPlayer.Play();
 
@@ -835,9 +864,9 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
             {
                 try
                 {
-                    await Task.Delay(400);
+                    await Task.Delay(300);
                     if (_mediaPlayer == null) return;
-                    _mediaPlayer.Time = savedTime;
+                    if (savedTime > 0) _mediaPlayer.Time = savedTime;
                     if (!wasPlaying)
                     {
                         await Task.Delay(100);
@@ -852,6 +881,42 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
             });
         }
         catch { _isApplyingRotation = false; }
+    }
+
+    public void TakeSnapshot()
+    {
+        if (_mediaPlayer == null || !HasMedia) return;
+
+        try
+        {
+            string baseDir = AppDomain.CurrentDomain.BaseDirectory;
+            string imagesDir = Path.Combine(baseDir, "Vplayer-images");
+            if (!Directory.Exists(imagesDir))
+            {
+                Directory.CreateDirectory(imagesDir);
+            }
+
+            string rawTitle = Path.GetFileNameWithoutExtension(_currentFilePath ?? "video");
+            string safeTitle = string.Join("_", rawTitle.Split(Path.GetInvalidFileNameChars()));
+            if (string.IsNullOrWhiteSpace(safeTitle)) safeTitle = "snapshot";
+
+            string fileName = $"{safeTitle}_{DateTime.Now:yyyyMMdd_HHmmss_fff}.png";
+            string fullPath = Path.Combine(imagesDir, fileName);
+
+            bool ok = _mediaPlayer.TakeSnapshot(0, fullPath, 0, 0);
+            if (ok)
+            {
+                StatusText = $"Đã chụp: {fileName}";
+            }
+            else
+            {
+                StatusText = "Không thể chụp ảnh";
+            }
+        }
+        catch (Exception ex)
+        {
+            StatusText = $"Lỗi chụp ảnh: {ex.Message}";
+        }
     }
 
     private void ZoomIn()
