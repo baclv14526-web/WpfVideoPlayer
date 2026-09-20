@@ -20,9 +20,10 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     private MediaPlayer? _mediaPlayer;
 
     // ── Motion detection & Cache services ────────────────────────────────────
-    private readonly MotionDetectionService _motionService = new();
-    private readonly BookmarkCacheService _cacheService = new();
+    private readonly Lazy<MotionDetectionService> _motionService = new(() => new MotionDetectionService());
+    private readonly Lazy<BookmarkCacheService> _cacheService = new(() => new BookmarkCacheService());
     private CancellationTokenSource? _scanCts;
+    private Task? _initTask;
 
     // ── UI timer ─────────────────────────────────────────────────────────────
     private readonly DispatcherTimer _uiTimer;
@@ -211,7 +212,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     }
 
     // ── Timeline Hover Preview properties ─────────────────────────────────────
-    private readonly VideoPreviewService _previewService = new();
+    private readonly Lazy<VideoPreviewService> _previewService = new(() => new VideoPreviewService());
     private CancellationTokenSource? _hoverPreviewCts;
     private bool _isTimelineHoverPreviewVisible;
     private double _timelineHoverLeft;
@@ -426,20 +427,44 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
 
     private void InitLibVLC()
     {
-        try
+        _initTask = Task.Run(() =>
         {
-            Core.Initialize();
-            CreateLibVLC(0);
-        }
-        catch (Exception ex)
-        {
-            StatusText = $"Lỗi khởi tạo LibVLC: {ex.Message}";
-        }
+            try
+            {
+                Core.Initialize();
+                var libVlc = new LibVLC(enableDebugLogs: false, BuildLibVlcArgs(0));
+                var player = new MediaPlayer(libVlc);
+
+                Application.Current?.Dispatcher.Invoke(() =>
+                {
+                    _libVLC = libVlc;
+                    _mediaPlayer = player;
+                    _mediaPlayer.Volume = (int)_volume;
+                    _mediaPlayer.Mute = _isMuted;
+                    AttachMediaPlayerEvents();
+                    _libVlcRotation = 0;
+                    OnPropertyChanged(nameof(MediaPlayer));
+                    OnPropertyChanged(nameof(LibVLC));
+                });
+            }
+            catch (Exception ex)
+            {
+                Application.Current?.Dispatcher.Invoke(() =>
+                {
+                    StatusText = $"Lỗi khởi tạo LibVLC: {ex.Message}";
+                });
+            }
+        });
     }
 
     // ── Playback ──────────────────────────────────────────────────────────────
-    public void PlayFile(string path)
+    public async void PlayFile(string path)
     {
+        if (_initTask != null && !_initTask.IsCompleted)
+        {
+            await _initTask;
+        }
+
         if (_libVLC == null || _mediaPlayer == null) return;
         if (!File.Exists(path)) { StatusText = "File không tồn tại"; return; }
 
@@ -468,7 +493,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
             Playlist[i].IsCurrentlyPlaying = Playlist[i].FilePath == path;
 
         // Check if cached bookmarks exist for this video
-        var cached = _cacheService.LoadBookmarks(path);
+        var cached = _cacheService.Value.LoadBookmarks(path);
         if (cached != null && cached.Count > 0)
         {
             Bookmarks.Clear();
@@ -1304,7 +1329,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
                 ScanStatusText = $"Đang quét AI YOLO11 [{targetName}]: {p:0.#}%";
             });
 
-            var scanResult = await _motionService.ScanVideoAsync(target, progress, token);
+            var scanResult = await _motionService.Value.ScanVideoAsync(target, progress, token);
 
             if (!scanResult.Success)
             {
@@ -1319,7 +1344,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
             // Save to disk cache for subsequent playback
             if (scanResult.Bookmarks.Count > 0)
             {
-                _cacheService.SaveBookmarks(target, scanResult.Bookmarks);
+                _cacheService.Value.SaveBookmarks(target, scanResult.Bookmarks);
             }
 
             // Update UI if the user is still viewing this video
@@ -1396,7 +1421,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
 
         try
         {
-            var results = await _motionService.GenerateRandomBookmarksAsync(target, 10, token);
+            var results = await _motionService.Value.GenerateRandomBookmarksAsync(target, 10, token);
 
             if (string.Equals(_currentFilePath, target, StringComparison.OrdinalIgnoreCase))
             {
@@ -1408,7 +1433,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
 
                 if (Bookmarks.Count > 0)
                 {
-                    _cacheService.SaveBookmarks(target, Bookmarks);
+                    _cacheService.Value.SaveBookmarks(target, Bookmarks);
                     ScanStatusText = $"Đã tạo {Bookmarks.Count} mốc ngẫu nhiên và lưu cache";
                     StatusText = $"Đã tạo {Bookmarks.Count} mốc ngẫu nhiên";
                 }
@@ -1421,7 +1446,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
             {
                 if (results.Count > 0)
                 {
-                    _cacheService.SaveBookmarks(target, results);
+                    _cacheService.Value.SaveBookmarks(target, results);
                     StatusText = $"Đã lưu {results.Count} mốc ngẫu nhiên cho: {targetName}";
                 }
             }
@@ -1461,7 +1486,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         _scanCts?.Cancel();
         if (!string.IsNullOrEmpty(_currentFilePath))
         {
-            _cacheService.DeleteCache(_currentFilePath);
+            _cacheService.Value.DeleteCache(_currentFilePath);
         }
         Bookmarks.Clear();
         ScanStatusText = "Đã xóa danh sách bookmark và bộ nhớ đệm";
@@ -1499,7 +1524,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         {
             try
             {
-                var previewBmp = await _previewService.GetPreviewAsync(videoPath, hoverSec, token);
+                var previewBmp = await _previewService.Value.GetPreviewAsync(videoPath, hoverSec, token);
                 if (!token.IsCancellationRequested && previewBmp != null)
                 {
                     Application.Current.Dispatcher.Invoke(() =>
@@ -1536,7 +1561,8 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     public void Dispose()
     {
         _hoverPreviewCts?.Cancel();
-        _previewService.Dispose();
+        if (_previewService.IsValueCreated)
+            _previewService.Value.Dispose();
         _scanCts?.Cancel();
         _uiTimer.Stop();
         if (_mediaPlayer != null)
