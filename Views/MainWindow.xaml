@@ -64,11 +64,10 @@
             <RowDefinition Height="Auto"/> <!-- Controls -->
         </Grid.RowDefinitions>
 
-        <!-- ══ TITLE BAR ══════════════════════════════════════════════════════ -->
-        <Border Grid.Row="0" Background="{StaticResource BrushBgPanel}" Height="40"
+        <!-- ══ TOP BAR / TITLE BAR ══════════════════════════════════════════════ -->
+        <Border Grid.Row="0" x:Name="TopBar" Background="{StaticResource BrushBgPanel}" Height="40"
                 BorderBrush="{StaticResource BrushBorder}" BorderThickness="0,0,0,1"
-                MouseLeftButtonDown="TitleBar_MouseLeftButtonDown"
-                Visibility="{Binding IsFullscreen, Converter={StaticResource BoolToVisInv}}">
+                MouseLeftButtonDown="TitleBar_MouseLeftButtonDown">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto"/>
@@ -76,15 +75,34 @@
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
 
-                <!-- App name + icon -->
+                <!-- Left: App brand (Normal mode) OR Exit Fullscreen button (Fullscreen mode) -->
                 <StackPanel Grid.Column="0" Orientation="Horizontal" 
-                            VerticalAlignment="Center" Margin="14,0">
-                    <ContentControl Style="{StaticResource VectorIconAccent}"
-                                    Content="{StaticResource IconAppLogo}"
-                                    Width="18" Height="18" Margin="0,0,8,0"
-                                    VerticalAlignment="Center"/>
-                    <TextBlock Text="VPlayer" FontSize="14" FontWeight="SemiBold"
-                               Foreground="{StaticResource BrushTextPrimary}" VerticalAlignment="Center"/>
+                            VerticalAlignment="Center" Margin="10,0">
+                    <!-- Normal window brand -->
+                    <StackPanel Orientation="Horizontal"
+                                Visibility="{Binding IsFullscreen, Converter={StaticResource BoolToVisInv}}">
+                        <ContentControl Style="{StaticResource VectorIconAccent}"
+                                        Content="{StaticResource IconAppLogo}"
+                                        Width="18" Height="18" Margin="4,0,8,0"
+                                        VerticalAlignment="Center"/>
+                        <TextBlock Text="VPlayer" FontSize="14" FontWeight="SemiBold"
+                                   Foreground="{StaticResource BrushTextPrimary}" VerticalAlignment="Center"/>
+                    </StackPanel>
+
+                    <!-- Fullscreen Exit Button on top-left (YouTube / Media Player style) -->
+                    <Button Style="{StaticResource IconButtonStyle}"
+                            Command="{Binding ExitFullscreenCommand}"
+                            ToolTip="Thoát toàn màn hình (Esc)"
+                            Visibility="{Binding IsFullscreen, Converter={StaticResource BoolToVis}}"
+                            Padding="8,4" Margin="2,0,8,0">
+                        <StackPanel Orientation="Horizontal">
+                            <ContentControl Style="{StaticResource VectorIconAccent}"
+                                            Content="{StaticResource IconFullscreenExit}"
+                                            Width="16" Height="16" Margin="0,0,6,0"/>
+                            <TextBlock Text="Thoát toàn màn hình" FontSize="12" FontWeight="SemiBold"
+                                       Foreground="{StaticResource BrushTextPrimary}" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Button>
                 </StackPanel>
 
                 <!-- Current title -->
@@ -95,18 +113,34 @@
 
                 <!-- Window controls -->
                 <StackPanel Grid.Column="2" Orientation="Horizontal" Margin="4,0">
+                    <!-- Normal window minimize / maximize -->
+                    <StackPanel Orientation="Horizontal"
+                                Visibility="{Binding IsFullscreen, Converter={StaticResource BoolToVisInv}}">
+                        <Button Style="{StaticResource IconButtonStyle}"
+                                Padding="12,0" Height="40" Click="MinimizeButton_Click">
+                            <ContentControl Style="{StaticResource VectorIcon}"
+                                            Content="{StaticResource IconMinimize}"
+                                            Width="14" Height="14"/>
+                        </Button>
+                        <Button x:Name="MaxRestoreBtn" Style="{StaticResource IconButtonStyle}"
+                                Padding="12,0" Height="40" Click="MaximizeButton_Click">
+                            <ContentControl Style="{StaticResource VectorIcon}"
+                                            Content="{StaticResource IconMaximize}"
+                                            Width="13" Height="13"/>
+                        </Button>
+                    </StackPanel>
+
+                    <!-- Top-right Exit Fullscreen button (in Fullscreen mode) -->
                     <Button Style="{StaticResource IconButtonStyle}"
-                            Padding="12,0" Height="40" Click="MinimizeButton_Click">
-                        <ContentControl Style="{StaticResource VectorIcon}"
-                                        Content="{StaticResource IconMinimize}"
-                                        Width="14" Height="14"/>
+                            Command="{Binding ExitFullscreenCommand}"
+                            ToolTip="Thoát toàn màn hình (Esc)"
+                            Visibility="{Binding IsFullscreen, Converter={StaticResource BoolToVis}}"
+                            Padding="12,0" Height="40">
+                        <ContentControl Style="{StaticResource VectorIconAccent}"
+                                        Content="{StaticResource IconFullscreenExit}"
+                                        Width="16" Height="16"/>
                     </Button>
-                    <Button x:Name="MaxRestoreBtn" Style="{StaticResource IconButtonStyle}"
-                            Padding="12,0" Height="40" Click="MaximizeButton_Click">
-                        <ContentControl Style="{StaticResource VectorIcon}"
-                                        Content="{StaticResource IconMaximize}"
-                                        Width="13" Height="13"/>
-                    </Button>
+
                     <Button Style="{StaticResource IconButtonStyle}"
                             Padding="12,0" Height="40" Click="CloseButton_Click">
                         <Button.Triggers>
@@ -811,6 +845,8 @@
                                               ToolTip="Intro 30s @2x, sau đó nhảy chia đều theo độ dài video phát 30s @2x"/>
                                     <Separator/>
                                     <MenuItem Header="── TỐC ĐỘ CỐ ĐỊNH ──" IsEnabled="False" Foreground="{StaticResource BrushTextSecondary}" FontSize="10"/>
+                                    <MenuItem Header="0.05x (Cực chậm)" Command="{Binding SetSpeedCommand}" CommandParameter="0.05"/>
+                                    <MenuItem Header="0.1x (Rất chậm)"  Command="{Binding SetSpeedCommand}" CommandParameter="0.1"/>
                                     <MenuItem Header="0.25x" Command="{Binding SetSpeedCommand}" CommandParameter="0.25"/>
                                     <MenuItem Header="0.5x"  Command="{Binding SetSpeedCommand}" CommandParameter="0.5"/>
                                     <MenuItem Header="0.75x" Command="{Binding SetSpeedCommand}" CommandParameter="0.75"/>
@@ -930,9 +966,19 @@
                                             Width="20" Height="20"/>
                         </Button>
 
-                        <!-- Fullscreen -->
-                        <Button Style="{StaticResource IconButtonStyle}" Padding="8"
-                                Command="{Binding ToggleFullscreenCommand}" ToolTip="Toàn màn hình (F)">
+                        <!-- Fullscreen Toggle Button -->
+                        <Button Padding="8" Command="{Binding ToggleFullscreenCommand}">
+                            <Button.Style>
+                                <Style TargetType="Button" BasedOn="{StaticResource IconButtonStyle}">
+                                    <Setter Property="ToolTip" Value="Toàn màn hình (F)"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsFullscreen}" Value="True">
+                                            <Setter Property="ToolTip" Value="Thoát toàn màn hình (Esc / F)"/>
+                                            <Setter Property="Background" Value="#336C63FF"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Button.Style>
                             <Grid>
                                 <!-- Expand to fullscreen -->
                                 <ContentControl Style="{StaticResource VectorIcon}"
@@ -940,7 +986,7 @@
                                                 Width="20" Height="20"
                                                 Visibility="{Binding IsFullscreen, Converter={StaticResource BoolToVisInv}}"/>
                                 <!-- Exit fullscreen -->
-                                <ContentControl Style="{StaticResource VectorIcon}"
+                                <ContentControl Style="{StaticResource VectorIconAccent}"
                                                 Content="{StaticResource IconFullscreenExit}"
                                                 Width="20" Height="20"
                                                 Visibility="{Binding IsFullscreen, Converter={StaticResource BoolToVis}}"/>

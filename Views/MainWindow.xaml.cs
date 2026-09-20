@@ -111,6 +111,7 @@ public partial class MainWindow : Window
         if (_vm.IsFullscreen)
         {
             ControlsBar.Visibility = Visibility.Collapsed;
+            TopBar.Visibility      = Visibility.Collapsed;
             Mouse.OverrideCursor   = Cursors.None;
         }
     }
@@ -118,6 +119,7 @@ public partial class MainWindow : Window
     private void RestoreControlsAndCursor()
     {
         ControlsBar.Visibility = Visibility.Visible;
+        TopBar.Visibility      = Visibility.Visible;
         Mouse.OverrideCursor   = null;
     }
 

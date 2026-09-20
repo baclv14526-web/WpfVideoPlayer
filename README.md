@@ -11,7 +11,7 @@
 | **Codec** | MP4, MKV, AVI, MOV, WMV, FLV, WebM, M4V, TS, VOB, OGV, 3GP, MPG, RMVB, DIVX, HEVC/H.265, H.264, ASF, F4V, MXF và nhiều hơn nữa |
 | **Playlist** | Thêm nhiều file/thư mục, xóa từng item, xóa tất cả |
 | **Điều khiển** | Play/Pause, Stop, Previous, Next, Seek (←/→), Volume 0–200% |
-| **Tốc độ phát** | 0.25x, 0.5x, 0.75x, 1x, 1.25x, 1.5x, 2x, 2.5x, 3x, 4x (Menu + phím tắt [ / ]) |
+| **Tốc độ phát** | 0.05x, 0.1x, 0.25x, 0.5x, 0.75x, 1x, 1.25x, 1.5x, 2x, 2.5x, 3x, 4x, 6x, 8x, 10x, 16x, 32x, 64x (Menu + phím tắt [ / ]) |
 | **Chế độ** | Lặp lại (Repeat), Ngẫu nhiên (Shuffle) |
 | **UI** | Dark theme, custom title bar, fullscreen, kéo thả file |
 | **Phím tắt** | Space, F, M, Ctrl+O, ←/→, ↑/↓, [ / ], Escape |
