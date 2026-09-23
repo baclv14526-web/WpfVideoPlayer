@@ -171,7 +171,9 @@
             <!-- Video area -->
             <Border Grid.Column="0" Background="Black" AllowDrop="True"
                     Drop="VideoArea_Drop" DragOver="VideoArea_DragOver"
-                    MouseLeftButtonDown="VideoArea_MouseLeftButtonDown">
+                    MouseLeftButtonDown="VideoArea_MouseLeftButtonDown"
+                    MouseEnter="VideoArea_MouseEnter"
+                    MouseLeave="VideoArea_MouseLeave">
                 <Grid>
                     <!-- VLC video surface -->
                     <vlc:VideoView x:Name="VideoView" MediaPlayer="{Binding MediaPlayer}"
@@ -227,6 +229,53 @@
                             Visibility="{Binding HasMedia, Converter={StaticResource BoolToVis}}">
                         <TextBlock Text="{Binding VideoInfo}" FontSize="11"
                                    Foreground="{StaticResource BrushTextSecondary}"/>
+                    </Border>
+
+                    <!-- Fullscreen Exit X Button overlay (top-right, fade on hover) -->
+                    <Border x:Name="FullscreenExitOverlay"
+                            HorizontalAlignment="Right" VerticalAlignment="Top"
+                            Margin="20,20,20,0"
+                            Opacity="0"
+                            IsHitTestVisible="{Binding IsFullscreen}"
+                            Visibility="{Binding IsFullscreen, Converter={StaticResource BoolToVis}}">
+                        <Border.Triggers>
+                            <!-- Fade in when parent video Border is hovered -->
+                        </Border.Triggers>
+                        <Button Command="{Binding ExitFullscreenCommand}"
+                                ToolTip="Thoát toàn màn hình (Esc)"
+                                Cursor="Hand"
+                                Background="Transparent" BorderThickness="0"
+                                Padding="0">
+                            <Button.Template>
+                                <ControlTemplate TargetType="Button">
+                                    <Border x:Name="BtnBorder"
+                                            Width="44" Height="44"
+                                            CornerRadius="22"
+                                            Background="#CC0D0D14"
+                                            BorderBrush="#55FFFFFF" BorderThickness="1">
+                                        <Border.Effect>
+                                            <DropShadowEffect Color="#000000" BlurRadius="12" ShadowDepth="2" Opacity="0.7"/>
+                                        </Border.Effect>
+                                        <Grid HorizontalAlignment="Center" VerticalAlignment="Center">
+                                            <!-- X icon drawn with lines -->
+                                            <ContentControl Style="{StaticResource VectorIcon}"
+                                                            Content="{StaticResource IconClose}"
+                                                            Width="16" Height="16"
+                                                            Foreground="#FFFFFF"/>
+                                        </Grid>
+                                    </Border>
+                                    <ControlTemplate.Triggers>
+                                        <Trigger Property="IsMouseOver" Value="True">
+                                            <Setter TargetName="BtnBorder" Property="Background" Value="#EECC2222"/>
+                                            <Setter TargetName="BtnBorder" Property="BorderBrush" Value="#AAFFFFFF"/>
+                                        </Trigger>
+                                        <Trigger Property="IsPressed" Value="True">
+                                            <Setter TargetName="BtnBorder" Property="Background" Value="#FF992222"/>
+                                        </Trigger>
+                                    </ControlTemplate.Triggers>
+                                </ControlTemplate>
+                            </Button.Template>
+                        </Button>
                     </Border>
                 </Grid>
             </Border>
@@ -734,6 +783,13 @@
                     <!-- Center zone: playback controls -->
                     <StackPanel Grid.Column="1" Orientation="Horizontal" 
                                 HorizontalAlignment="Center" VerticalAlignment="Center">
+                        <!-- Snapshot (Chụp ảnh video) - Left of Shuffle -->
+                        <Button Style="{StaticResource IconButtonStyle}" Padding="8" Margin="2,0"
+                                Command="{Binding TakeSnapshotCommand}" ToolTip="Chụp ảnh video (S / Ctrl+S)">
+                            <ContentControl Style="{StaticResource VectorIcon}"
+                                            Content="{StaticResource IconCamera}"
+                                            Width="20" Height="20"/>
+                        </Button>
                         <!-- Shuffle -->
                         <Button Style="{StaticResource IconButtonStyle}" Padding="8" Margin="2,0"
                                 Command="{Binding ToggleShuffleCommand}" ToolTip="Ngẫu nhiên">
@@ -759,13 +815,7 @@
                                             Content="{StaticResource IconPrevious}"
                                             Width="20" Height="20"/>
                         </Button>
-                        <!-- Snapshot (Chụp ảnh video) - Left of Play button -->
-                        <Button Style="{StaticResource IconButtonStyle}" Padding="8" Margin="2,0"
-                                Command="{Binding TakeSnapshotCommand}" ToolTip="Chụp ảnh video (S / Ctrl+S)">
-                            <ContentControl Style="{StaticResource VectorIcon}"
-                                            Content="{StaticResource IconCamera}"
-                                            Width="20" Height="20"/>
-                        </Button>
+
                         <!-- Play/Pause - prominent -->
                         <Button Style="{StaticResource IconButtonStyle}" Padding="0" Margin="4,0"
                                 Command="{Binding PlayPauseCommand}" ToolTip="Phát/Tạm dừng (Space)">
