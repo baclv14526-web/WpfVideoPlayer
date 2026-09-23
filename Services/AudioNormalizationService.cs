@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Concurrent;
 using System.IO;
 using System.Threading;
@@ -97,7 +97,7 @@ public sealed class AudioNormalizationService : IDisposable
             mp.SetAudioFormat("S16N", SampleRate, 1);
 
             mp.SetAudioCallbacks(
-                play: (data, samplesPtr, count, pts) =>
+                (data, samplesPtr, count, pts) =>
                 {
                     lock (sampleLock)
                     {
@@ -113,10 +113,10 @@ public sealed class AudioNormalizationService : IDisposable
                         if (sampleCount >= maxSamples) doneEvent.Set();
                     }
                 },
-                pause:  null,
-                resume: null,
-                flush:  null,
-                drain:  _ => doneEvent.Set()
+                null,
+                null,
+                null,
+                _ => doneEvent.Set()
             );
 
             mp.EndReached       += (_, _) => doneEvent.Set();
