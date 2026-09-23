@@ -22,7 +22,9 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     // ── Motion detection & Cache services ────────────────────────────────────
     private readonly Lazy<MotionDetectionService> _motionService = new(() => new MotionDetectionService());
     private readonly Lazy<BookmarkCacheService> _cacheService = new(() => new BookmarkCacheService());
+    private readonly Lazy<AudioNormalizationService> _normService = new(() => new AudioNormalizationService());
     private CancellationTokenSource? _scanCts;
+    private CancellationTokenSource? _normCts;
     private Task? _initTask;
 
     // ── UI timer ─────────────────────────────────────────────────────────────
@@ -57,6 +59,8 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     private long _targetStepPos = 0;
     private double _playbackSpeed = 1.0;
     private double _volume = 80;
+    private double _rawVolume = 80; // User's desired base volume before normalization
+    private bool _isAudioNormEnabled = false;
     private double _position;
     private double _duration;
     private string _currentTimeText = "0:00:00";
@@ -171,11 +175,34 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         }
     }
 
+    public bool IsAudioNormEnabled
+    {
+        get => _isAudioNormEnabled;
+        set
+        {
+            if (Set(ref _isAudioNormEnabled, value))
+            {
+                if (value)
+                {
+                    StatusText = "Đã bật Chuẩn hóa âm lượng (Auto Loudness)";
+                    if (HasMedia && !string.IsNullOrEmpty(_currentFilePath))
+                        _ = ApplyAudioNormalizationAsync(_currentFilePath);
+                }
+                else
+                {
+                    StatusText = "Đã tắt Chuẩn hóa âm lượng";
+                    Volume = _rawVolume;
+                }
+            }
+        }
+    }
+
     public double Volume
     {
         get => _volume;
         set
         {
+            _rawVolume = value;
             Set(ref _volume, value);
             if (_mediaPlayer != null)
                 _mediaPlayer.Volume = (int)value;
@@ -307,6 +334,7 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     public ICommand RotateCWCommand { get; }
     public ICommand RotateCCWCommand { get; }
     public ICommand TakeSnapshotCommand { get; }
+    public ICommand ToggleAudioNormCommand { get; }
 
     // ── Constructor ───────────────────────────────────────────────────────────
     public MainViewModel()
@@ -369,6 +397,9 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
 
         // Snapshot command
         TakeSnapshotCommand = new RelayCommand(TakeSnapshot, () => HasMedia);
+
+        // Audio Normalization command
+        ToggleAudioNormCommand = new RelayCommand(() => IsAudioNormEnabled = !IsAudioNormEnabled);
 
         _uiTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(300) };
         _uiTimer.Tick += OnUiTimer;
@@ -527,6 +558,12 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
             {
                 ScanStatusText = "Chưa quét video (Nhấn 'Quét cảnh ≥2 người' để bắt đầu)";
             }
+        }
+
+        // Automatic audio normalization if enabled
+        if (_isAudioNormEnabled)
+        {
+            _ = ApplyAudioNormalizationAsync(path);
         }
     }
 
@@ -1547,6 +1584,45 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
         TimelineHoverBookmark = null;
     }
 
+    // ── Audio Normalization ───────────────────────────────────────────────────
+    private async Task ApplyAudioNormalizationAsync(string filePath)
+    {
+        if (string.IsNullOrEmpty(filePath) || !_isAudioNormEnabled) return;
+
+        _normCts?.Cancel();
+        _normCts = new CancellationTokenSource();
+        var token = _normCts.Token;
+
+        try
+        {
+            double gain = await _normService.Value.GetGainFactorAsync(filePath, token);
+            if (token.IsCancellationRequested) return;
+
+            // Only apply if audio normalization is still enabled and video is the same
+            if (_isAudioNormEnabled && string.Equals(_currentFilePath, filePath, StringComparison.OrdinalIgnoreCase))
+            {
+                int normalizedVol = (int)Math.Clamp(Math.Round(_rawVolume * gain), 0, 200);
+                Application.Current?.Dispatcher.Invoke(() =>
+                {
+                    if (_isAudioNormEnabled && string.Equals(_currentFilePath, filePath, StringComparison.OrdinalIgnoreCase))
+                    {
+                        Set(ref _volume, (double)normalizedVol, nameof(Volume));
+                        if (_mediaPlayer != null)
+                            _mediaPlayer.Volume = normalizedVol;
+
+                        string gainDb = gain >= 1.0 ? $"+{20 * Math.Log10(gain):0.#}dB" : $"{20 * Math.Log10(gain):0.#}dB";
+                        StatusText = $"Chuẩn hóa âm lượng: {normalizedVol}% ({gainDb})";
+                    }
+                });
+            }
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Audio normalization error: {ex.Message}");
+        }
+    }
+
     // ── INotifyPropertyChanged ────────────────────────────────────────────────
     public event PropertyChangedEventHandler? PropertyChanged;
     protected void OnPropertyChanged([CallerMemberName] string? name = null)
@@ -1560,6 +1636,9 @@ public class MainViewModel : INotifyPropertyChanged, IDisposable
     // ── IDisposable ───────────────────────────────────────────────────────────
     public void Dispose()
     {
+        _normCts?.Cancel();
+        if (_normService.IsValueCreated)
+            _normService.Value.Dispose();
         _hoverPreviewCts?.Cancel();
         if (_previewService.IsValueCreated)
             _previewService.Value.Dispose();

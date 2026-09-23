@@ -55,6 +55,9 @@
         <!-- Snapshot / Chụp ảnh: S / Ctrl+S -->
         <KeyBinding Key="S" Command="{Binding TakeSnapshotCommand}"/>
         <KeyBinding Key="S" Modifiers="Ctrl" Command="{Binding TakeSnapshotCommand}"/>
+        <!-- Audio Normalization / Chuẩn hóa âm lượng: N / Ctrl+N -->
+        <KeyBinding Key="N" Command="{Binding ToggleAudioNormCommand}"/>
+        <KeyBinding Key="N" Modifiers="Ctrl" Command="{Binding ToggleAudioNormCommand}"/>
     </Window.InputBindings>
 
     <Grid>
@@ -978,6 +981,16 @@
                                 <TextBlock Text="{Binding VideoRotationText}" FontSize="11" FontWeight="SemiBold"
                                            Foreground="{StaticResource BrushTextPrimary}" VerticalAlignment="Center"/>
                             </StackPanel>
+                        </Button>
+
+                        <!-- Audio Normalization (Chuẩn hóa âm lượng) -->
+                        <Button Style="{StaticResource IconButtonStyle}" Padding="8" Margin="0,0,2,0"
+                                Command="{Binding ToggleAudioNormCommand}"
+                                ToolTip="Chuẩn hóa âm lượng tự động (Đưa âm lượng tất cả video về cùng 1 mức - N / Ctrl+N)">
+                            <ContentControl Style="{StaticResource VectorIcon}"
+                                            Content="{StaticResource IconNorm}"
+                                            Width="18" Height="18"
+                                            Foreground="{Binding IsAudioNormEnabled, Converter={StaticResource AccentBrush}}"/>
                         </Button>
 
                         <!-- Mute button -->
