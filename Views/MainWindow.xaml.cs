@@ -40,6 +40,12 @@ public partial class MainWindow : Window
         // Mouse idle timer – fires after 2.5 s without mouse movement in fullscreen
         _mouseIdleTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(MouseIdleSeconds) };
         _mouseIdleTimer.Tick += MouseIdleTimer_Tick;
+
+        SizeChanged += (_, _) =>
+        {
+            if (_vm.IsFullscreen && FullscreenExitPopup.IsOpen)
+                UpdateFullscreenExitPopup();
+        };
     }
 
     // ── Title bar drag ────────────────────────────────────────────────────────
@@ -113,8 +119,8 @@ public partial class MainWindow : Window
         {
             ControlsBar.Visibility = Visibility.Collapsed;
             TopBar.Visibility      = Visibility.Collapsed;
+            FullscreenExitPopup.IsOpen = false;
             Mouse.OverrideCursor   = Cursors.None;
-            FadeOutExitOverlay();
         }
     }
 
@@ -123,22 +129,28 @@ public partial class MainWindow : Window
         ControlsBar.Visibility = Visibility.Visible;
         TopBar.Visibility      = Visibility.Visible;
         Mouse.OverrideCursor   = null;
+        if (_vm.IsFullscreen)
+        {
+            UpdateFullscreenExitPopup();
+        }
     }
 
-    // ── Fullscreen hover X button fade helpers ────────────────────────────────
-    private void FadeInExitOverlay()
+    // ── Fullscreen hover X button popup ──────────────────────────────────────
+    private void UpdateFullscreenExitPopup()
     {
-        if (!_vm.IsFullscreen) return;
-        FullscreenExitOverlay.IsHitTestVisible = true;
-        var anim = new DoubleAnimation(1.0, TimeSpan.FromMilliseconds(180));
-        FullscreenExitOverlay.BeginAnimation(OpacityProperty, anim);
-    }
-
-    private void FadeOutExitOverlay()
-    {
-        var anim = new DoubleAnimation(0.0, TimeSpan.FromMilliseconds(300));
-        anim.Completed += (_, _) => FullscreenExitOverlay.IsHitTestVisible = false;
-        FullscreenExitOverlay.BeginAnimation(OpacityProperty, anim);
+        if (_vm.IsFullscreen)
+        {
+            FullscreenExitPopup.PlacementTarget = VideoView;
+            FullscreenExitPopup.Placement = System.Windows.Controls.Primitives.PlacementMode.Top;
+            double w = VideoView.ActualWidth > 0 ? VideoView.ActualWidth : SystemParameters.PrimaryScreenWidth;
+            FullscreenExitPopup.HorizontalOffset = Math.Max(20, w - 68);
+            FullscreenExitPopup.VerticalOffset = 20;
+            FullscreenExitPopup.IsOpen = true;
+        }
+        else
+        {
+            FullscreenExitPopup.IsOpen = false;
+        }
     }
 
     // ── Window_MouseMove: reset idle timer when mouse moves ──────────────────
@@ -151,12 +163,20 @@ public partial class MainWindow : Window
         _mouseIdleTimer.Start();
     }
 
-    // ── VideoArea mouse enter/leave: fade the X button ───────────────────────
+    // ── VideoArea mouse enter/leave ──────────────────────────────────────────
     private void VideoArea_MouseEnter(object sender, MouseEventArgs e)
-        => FadeInExitOverlay();
+    {
+        if (_vm.IsFullscreen)
+        {
+            RestoreControlsAndCursor();
+            _mouseIdleTimer.Stop();
+            _mouseIdleTimer.Start();
+        }
+    }
 
     private void VideoArea_MouseLeave(object sender, MouseEventArgs e)
-        => FadeOutExitOverlay();
+    {
+    }
 
     // ── VideoArea double-click: toggle fullscreen ─────────────────────────────
     private void VideoArea_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)

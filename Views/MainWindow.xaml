@@ -41,6 +41,7 @@
         <KeyBinding Key="Down" Command="{Binding VolumeDownCommand}"/>
         <KeyBinding Key="M" Command="{Binding ToggleMuteCommand}"/>
         <KeyBinding Key="F" Command="{Binding ToggleFullscreenCommand}"/>
+        <KeyBinding Key="F11" Command="{Binding ToggleFullscreenCommand}"/>
         <KeyBinding Key="OemOpenBrackets" Command="{Binding SpeedDownCommand}"/>
         <KeyBinding Key="OemCloseBrackets" Command="{Binding SpeedUpCommand}"/>
         <KeyBinding Key="Escape" Command="{Binding ExitFullscreenCommand}"/>
@@ -234,52 +235,48 @@
                                    Foreground="{StaticResource BrushTextSecondary}"/>
                     </Border>
 
-                    <!-- Fullscreen Exit X Button overlay (top-right, fade on hover) -->
-                    <Border x:Name="FullscreenExitOverlay"
-                            HorizontalAlignment="Right" VerticalAlignment="Top"
-                            Margin="20,20,20,0"
-                            Opacity="0"
-                            IsHitTestVisible="{Binding IsFullscreen}"
-                            Visibility="{Binding IsFullscreen, Converter={StaticResource BoolToVis}}">
-                        <Border.Triggers>
-                            <!-- Fade in when parent video Border is hovered -->
-                        </Border.Triggers>
-                        <Button Command="{Binding ExitFullscreenCommand}"
-                                ToolTip="Thoát toàn màn hình (Esc)"
-                                Cursor="Hand"
-                                Background="Transparent" BorderThickness="0"
-                                Padding="0">
-                            <Button.Template>
-                                <ControlTemplate TargetType="Button">
-                                    <Border x:Name="BtnBorder"
-                                            Width="44" Height="44"
-                                            CornerRadius="22"
-                                            Background="#CC0D0D14"
-                                            BorderBrush="#55FFFFFF" BorderThickness="1">
-                                        <Border.Effect>
-                                            <DropShadowEffect Color="#000000" BlurRadius="12" ShadowDepth="2" Opacity="0.7"/>
-                                        </Border.Effect>
-                                        <Grid HorizontalAlignment="Center" VerticalAlignment="Center">
-                                            <!-- X icon drawn with lines -->
-                                            <ContentControl Style="{StaticResource VectorIcon}"
-                                                            Content="{StaticResource IconClose}"
-                                                            Width="16" Height="16"
-                                                            Foreground="#FFFFFF"/>
-                                        </Grid>
-                                    </Border>
-                                    <ControlTemplate.Triggers>
-                                        <Trigger Property="IsMouseOver" Value="True">
-                                            <Setter TargetName="BtnBorder" Property="Background" Value="#EECC2222"/>
-                                            <Setter TargetName="BtnBorder" Property="BorderBrush" Value="#AAFFFFFF"/>
-                                        </Trigger>
-                                        <Trigger Property="IsPressed" Value="True">
-                                            <Setter TargetName="BtnBorder" Property="Background" Value="#FF992222"/>
-                                        </Trigger>
-                                    </ControlTemplate.Triggers>
-                                </ControlTemplate>
-                            </Button.Template>
-                        </Button>
-                    </Border>
+                    <!-- Fullscreen Exit Floating X Button (Popup overcomes Win32 VideoView Airspace) -->
+                    <Popup x:Name="FullscreenExitPopup"
+                           AllowsTransparency="True"
+                           Focusable="False"
+                           Placement="Top"
+                           PlacementTarget="{Binding ElementName=VideoView}"
+                           PopupAnimation="Fade">
+                        <Border Width="48" Height="48" CornerRadius="24"
+                                Background="#D914141F"
+                                BorderBrush="#66FFFFFF" BorderThickness="1.5"
+                                Margin="0">
+                            <Border.Effect>
+                                <DropShadowEffect Color="#000000" BlurRadius="16" ShadowDepth="3" Opacity="0.85"/>
+                            </Border.Effect>
+                            <Button Command="{Binding ExitFullscreenCommand}"
+                                    ToolTip="Thoát toàn màn hình (Esc / F11 / F)"
+                                    Cursor="Hand"
+                                    Background="Transparent" BorderThickness="0"
+                                    Padding="0">
+                                <Button.Template>
+                                    <ControlTemplate TargetType="Button">
+                                        <Border x:Name="BtnBorder" Background="Transparent" CornerRadius="24">
+                                            <Grid HorizontalAlignment="Center" VerticalAlignment="Center">
+                                                <ContentControl Style="{StaticResource VectorIcon}"
+                                                                Content="{StaticResource IconClose}"
+                                                                Width="18" Height="18"
+                                                                Foreground="#FFFFFF"/>
+                                            </Grid>
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter TargetName="BtnBorder" Property="Background" Value="#EECC2222"/>
+                                            </Trigger>
+                                            <Trigger Property="IsPressed" Value="True">
+                                                <Setter TargetName="BtnBorder" Property="Background" Value="#FFAA1111"/>
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </Button.Template>
+                            </Button>
+                        </Border>
+                    </Popup>
                 </Grid>
             </Border>
 
