@@ -1,5 +1,7 @@
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Input;
+using System.Windows.Interop;
 using System.Windows.Media.Animation;
 using System.Windows.Threading;
 using WpfVideoPlayer.ViewModels;
@@ -18,6 +20,28 @@ public partial class MainWindow : Window
     // ── Mouse idle timer (auto-hide controls in fullscreen) ───────────────────
     private readonly DispatcherTimer _mouseIdleTimer;
     private const double MouseIdleSeconds = 2.5;
+
+    // ── Global low-level mouse hook (catches mouse over Win32 VideoView / VLC) ──
+    private IntPtr _mouseHookHandle = IntPtr.Zero;
+    private LowLevelMouseProc? _mouseHookDelegate;
+    private delegate IntPtr LowLevelMouseProc(int nCode, IntPtr wParam, IntPtr lParam);
+
+    private const int WH_MOUSE_LL = 14;
+    private const int WM_MOUSEMOVE = 0x0200;
+    private const int WM_LBUTTONDOWN = 0x0201;
+
+    [DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]
+    private static extern IntPtr SetWindowsHookEx(int idHook, LowLevelMouseProc lpfn, IntPtr hMod, uint dwThreadId);
+
+    [DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool UnhookWindowsHookEx(IntPtr hhk);
+
+    [DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]
+    private static extern IntPtr CallNextHookEx(IntPtr hhk, int nCode, IntPtr wParam, IntPtr lParam);
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Auto, SetLastError = true)]
+    private static extern IntPtr GetModuleHandle(string? lpModuleName);
 
     public MainWindow()
     {
@@ -46,6 +70,59 @@ public partial class MainWindow : Window
             if (_vm.IsFullscreen && FullscreenExitPopup.IsOpen)
                 UpdateFullscreenExitPopup();
         };
+
+        LocationChanged += (_, _) =>
+        {
+            if (_vm.IsFullscreen && FullscreenExitPopup.IsOpen)
+                UpdateFullscreenExitPopup();
+        };
+
+        Loaded += MainWindow_Loaded;
+    }
+
+    private void MainWindow_Loaded(object sender, RoutedEventArgs e)
+    {
+        InstallMouseHook();
+    }
+
+    private void InstallMouseHook()
+    {
+        if (_mouseHookHandle != IntPtr.Zero) return;
+        _mouseHookDelegate = MouseHookCallback;
+        using var curProcess = System.Diagnostics.Process.GetCurrentProcess();
+        using var curModule = curProcess.MainModule;
+        _mouseHookHandle = SetWindowsHookEx(WH_MOUSE_LL, _mouseHookDelegate, GetModuleHandle(curModule?.ModuleName), 0);
+    }
+
+    private void UninstallMouseHook()
+    {
+        if (_mouseHookHandle != IntPtr.Zero)
+        {
+            UnhookWindowsHookEx(_mouseHookHandle);
+            _mouseHookHandle = IntPtr.Zero;
+            _mouseHookDelegate = null;
+        }
+    }
+
+    private IntPtr MouseHookCallback(int nCode, IntPtr wParam, IntPtr lParam)
+    {
+        if (nCode >= 0 && _vm.IsFullscreen)
+        {
+            int msg = wParam.ToInt32();
+            if (msg == WM_MOUSEMOVE || msg == WM_LBUTTONDOWN)
+            {
+                Dispatcher.InvokeAsync(() =>
+                {
+                    if (_vm.IsFullscreen)
+                    {
+                        RestoreControlsAndCursor();
+                        _mouseIdleTimer.Stop();
+                        _mouseIdleTimer.Start();
+                    }
+                }, DispatcherPriority.Input);
+            }
+        }
+        return CallNextHookEx(_mouseHookHandle, nCode, wParam, lParam);
     }
 
     // ── Title bar drag ────────────────────────────────────────────────────────
@@ -140,11 +217,10 @@ public partial class MainWindow : Window
     {
         if (_vm.IsFullscreen)
         {
-            FullscreenExitPopup.PlacementTarget = VideoView;
-            FullscreenExitPopup.Placement = System.Windows.Controls.Primitives.PlacementMode.Top;
-            double w = VideoView.ActualWidth > 0 ? VideoView.ActualWidth : SystemParameters.PrimaryScreenWidth;
-            FullscreenExitPopup.HorizontalOffset = Math.Max(20, w - 68);
-            FullscreenExitPopup.VerticalOffset = 20;
+            FullscreenExitPopup.Placement = System.Windows.Controls.Primitives.PlacementMode.Absolute;
+            double screenW = ActualWidth > 0 ? ActualWidth : SystemParameters.PrimaryScreenWidth;
+            FullscreenExitPopup.HorizontalOffset = Left + screenW - 68;
+            FullscreenExitPopup.VerticalOffset = Top + 16;
             FullscreenExitPopup.IsOpen = true;
         }
         else
@@ -312,7 +388,10 @@ public partial class MainWindow : Window
     // ── Cleanup ───────────────────────────────────────────────────────────────
     private void Window_Closed(object sender, EventArgs e)
     {
+        UninstallMouseHook();
         _mouseIdleTimer.Stop();
+        if (FullscreenExitPopup != null)
+            FullscreenExitPopup.IsOpen = false;
         VideoView.MediaPlayer = null;
         _vm.Dispose();
     }

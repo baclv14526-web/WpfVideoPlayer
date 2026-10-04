@@ -239,8 +239,7 @@
                     <Popup x:Name="FullscreenExitPopup"
                            AllowsTransparency="True"
                            Focusable="False"
-                           Placement="Top"
-                           PlacementTarget="{Binding ElementName=VideoView}"
+                           Placement="Absolute"
                            PopupAnimation="Fade">
                         <Border Width="48" Height="48" CornerRadius="24"
                                 Background="#D914141F"
